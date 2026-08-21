@@ -16,7 +16,15 @@
 <meta name="twitter:description" content="Auto-records every death. AI explains why it happened. Tracks the mistakes you keep repeating.">
 <meta name="twitter:image" content="https://whyidied.com/og.png">
 <meta name="theme-color" content="#0B0E14">
-<script>if(location.search.indexOf('noanim')<0)document.documentElement.classList.add('js');</script>
+<script>
+(function(){
+  var ok = location.search.indexOf('noanim') < 0;
+  if (ok) document.documentElement.classList.add('js');
+  if (ok && matchMedia('(hover: hover) and (pointer: fine)').matches
+         && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+    document.documentElement.classList.add('gs');
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230B0E14'/><text x='50' y='68' font-size='52' text-anchor='middle' font-family='monospace' fill='%23FF3B4E' font-weight='bold'>†?</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -122,6 +130,7 @@ h1 .line em{font-style:normal;color:var(--green)}
   transition:transform .15s,box-shadow .2s,background .2s;box-shadow:0 6px 24px -8px var(--red-glow)}
 .btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px -8px var(--red-glow)}
 .btn:active{transform:translateY(0)}
+html.gs .btn:hover,html.gs .btn:active{transform:none}
 .signup .fine{font-size:.8rem;color:var(--muted);margin-top:12px}
 .signup .fine b{color:var(--green);font-weight:600}
 .signup .msg{margin-top:12px;font-family:var(--mono);font-size:.85rem;display:none}
@@ -175,6 +184,57 @@ html.js .reveal.in{opacity:1;transform:none}
   border-radius:12px;font-size:.9rem}
 .finding .fix b{color:var(--green)}
 .finding .repeat{margin-top:12px;font-family:var(--mono);font-size:.75rem;color:var(--red)}
+
+/* ---------- fx canvas + cursor ---------- */
+#fx{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity 1.2s ease}
+#fx.on{opacity:1}
+.hero .wrap{position:relative;z-index:2}
+@media(hover:hover) and (pointer:fine){
+  html.gs body{cursor:none}
+  html.gs a,html.gs button,html.gs summary,html.gs input{cursor:none}
+}
+#cur{position:fixed;left:0;top:0;z-index:9999;pointer-events:none;width:42px;height:42px;margin:-21px 0 0 -21px;
+  display:none;transition:transform .18s ease,opacity .3s}
+html.gs #cur{display:block}
+#cur .l{position:absolute;background:var(--red);transition:all .18s ease}
+#cur .l1{left:50%;top:0;width:1.5px;height:11px;margin-left:-.75px}
+#cur .l2{left:50%;bottom:0;width:1.5px;height:11px;margin-left:-.75px}
+#cur .l3{left:0;top:50%;height:1.5px;width:11px;margin-top:-.75px}
+#cur .l4{right:0;top:50%;height:1.5px;width:11px;margin-top:-.75px}
+#cur .c{position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:var(--red)}
+#cur.hot{transform:scale(1.6) rotate(45deg)}
+#cur.hot .l{background:var(--green)}
+#cur.hot .c{background:var(--green)}
+input:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+html.gs h1 .line{animation:none;opacity:1;transform:none}
+h1 .ch{display:inline-block;white-space:pre}
+
+/* ---------- last 12 seconds ---------- */
+.last12{padding:0;position:relative}
+.l12-pin{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+.l12-flash{position:absolute;inset:0;background:var(--red);opacity:0;pointer-events:none;z-index:5}
+.l12-head{margin-bottom:26px}
+.l12-clock{font-family:var(--mono);font-weight:700;font-size:clamp(3.2rem,10vw,7rem);letter-spacing:-.01em;
+  color:var(--ink);line-height:1;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.l12-clock .ms{color:var(--red);font-size:.5em}
+.l12-bar{height:4px;background:#1C2333;border-radius:2px;margin:18px 0 34px;overflow:hidden;max-width:640px}
+.l12-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),#ff7484)}
+.l12-events{display:flex;flex-direction:column;gap:14px;max-width:640px}
+.l12-ev{display:flex;gap:16px;align-items:baseline;padding:14px 18px;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px}
+html.gs .l12-ev{opacity:0;transform:translateY(24px)}
+.l12-ev .ts{font-family:var(--mono);font-size:.72rem;color:var(--muted);min-width:44px}
+.l12-ev .tx{font-family:var(--mono);font-size:.86rem;color:var(--ink)}
+.l12-ev.good{border-color:rgba(61,255,136,.3)}
+.l12-ev.good .tx{color:var(--green)}
+.l12-ev.bad{border-color:rgba(255,59,78,.4)}
+.l12-ev.bad .tx{color:var(--red)}
+.l12-verdict{max-width:640px;margin-top:22px;padding:18px 20px;border-left:3px solid var(--red);border-radius:0 12px 12px 0;
+  background:linear-gradient(90deg,var(--red-dim),transparent 80%)}
+html.gs .l12-verdict{opacity:0;transform:scale(.96)}
+.l12-verdict .vh{font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;color:var(--red);margin-bottom:6px}
+.l12-verdict p{font-family:var(--mono);font-size:.92rem;color:var(--ink)}
+.l12-verdict p b{color:var(--red)}
 
 /* ---------- app window mock ---------- */
 .hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
@@ -298,7 +358,9 @@ footer p{max-width:72ch;margin-top:12px}
 <body>
 
 <!-- ============ HERO — the death screen ============ -->
-<header class="hero">
+<div id="cur" aria-hidden="true"><span class="l l1"></span><span class="l l2"></span><span class="l l3"></span><span class="l l4"></span><span class="c"></span></div>
+<header class="hero" id="top">
+  <canvas id="fx" aria-hidden="true"></canvas>
   <div class="wrap">
     <div class="hero-copy">
     <div class="killfeed" aria-hidden="true">
@@ -388,6 +450,31 @@ footer p{max-width:72ch;margin-top:12px}
 </header>
 
 <main>
+<!-- ============ THE LAST 12 SECONDS (scroll-scrubbed) ============ -->
+<section class="last12" id="last12">
+  <div class="l12-pin">
+    <div class="wrap">
+      <div class="l12-head">
+        <div class="eyebrow">Scroll to replay</div>
+        <h2>The last 12 seconds of death&nbsp;#47</h2>
+      </div>
+      <div class="l12-clock" id="l12clock">8:31<span class="ms">.0</span></div>
+      <div class="l12-bar"><i id="l12bar"></i></div>
+      <div class="l12-events">
+        <div class="l12-ev good"><span class="ts">8:31.2</span><span class="tx">Won first shot — opponent 42 HP</span></div>
+        <div class="l12-ev"><span class="ts">8:36.4</span><span class="tx">Opponent boxes up, holds the right-hand angle</span></div>
+        <div class="l12-ev bad"><span class="ts">8:42.1</span><span class="tx">You peek left — full body exposed, no wall</span></div>
+        <div class="l12-ev bad"><span class="ts">8:43.2</span><span class="tx">Pump — 194 damage. ELIMINATED.</span></div>
+      </div>
+      <div class="l12-verdict">
+        <div class="vh">AI VERDICT — CONFIDENCE 84%</div>
+        <p><b>Unprotected left-hand peek.</b> You had the HP lead and handed it back. 4th time this week — and now you know.</p>
+      </div>
+    </div>
+    <div class="l12-flash" id="l12flash"></div>
+  </div>
+</section>
+
 <!-- ============ HOW IT WORKS ============ -->
 <section id="how">
   <div class="wrap">
@@ -758,6 +845,134 @@ document.getElementById('yr').textContent = new Date().getFullYear();
     });
   });
 })();
+
+/* ---------- premium layer: cursor, GSAP, three.js (desktop, motion-ok only) ---------- */
+(function(){
+  var gs = document.documentElement.classList.contains('gs');
+  if (!gs) return;
+
+  /* crosshair cursor — vanilla, no deps */
+  var cur = document.getElementById('cur');
+  var cx = innerWidth/2, cy = innerHeight/2, tx = cx, ty = cy, shown = false;
+  addEventListener('mousemove', function(e){
+    tx = e.clientX; ty = e.clientY;
+    if (!shown){ shown = true; cur.style.opacity = 1; }
+    var hot = e.target.closest && e.target.closest('a,button,summary,input,.tile,.tabs button');
+    cur.classList.toggle('hot', !!hot);
+  }, {passive:true});
+  cur.style.opacity = 0;
+  (function follow(){
+    cx += (tx-cx)*.28; cy += (ty-cy)*.28;
+    cur.style.left = cx+'px'; cur.style.top = cy+'px';
+    requestAnimationFrame(follow);
+  })();
+
+  addEventListener('load', function(){
+    if (!window.gsap || !window.ScrollTrigger){ document.documentElement.classList.remove('gs'); return; }
+    gsap.registerPlugin(ScrollTrigger);
+
+    /* headline: character cascade */
+    function chars(str){
+      var frag = document.createDocumentFragment();
+      str.split('').forEach(function(c){
+        var s = document.createElement('span'); s.className = 'ch'; s.textContent = c; frag.appendChild(s);
+      });
+      return frag;
+    }
+    document.querySelectorAll('h1 .line').forEach(function(line){
+      Array.prototype.slice.call(line.childNodes).forEach(function(node){
+        if (node.nodeType === 3){ line.replaceChild(chars(node.nodeValue), node); }
+        else if (node.nodeType === 1){ var t = node.textContent; node.textContent = ''; node.appendChild(chars(t)); }
+      });
+    });
+    gsap.from('h1 .ch', {yPercent:130, opacity:0, rotate:5, duration:.7, stagger:.022, delay:.9, ease:'back.out(1.6)'});
+
+    /* magnetic CTAs */
+    document.querySelectorAll('.btn, nav a.cta').forEach(function(b){
+      var qx = gsap.quickTo(b, 'x', {duration:.3, ease:'power3'}),
+          qy = gsap.quickTo(b, 'y', {duration:.3, ease:'power3'});
+      b.addEventListener('mousemove', function(e){
+        var r = b.getBoundingClientRect();
+        qx((e.clientX - r.left - r.width/2)*.3); qy((e.clientY - r.top - r.height/2)*.4);
+      });
+      b.addEventListener('mouseleave', function(){ qx(0); qy(0); });
+    });
+
+    /* the last 12 seconds — scroll-scrubbed replay */
+    var clock = document.getElementById('l12clock'), bar = document.getElementById('l12bar'),
+        flash = document.getElementById('l12flash'), evs = document.querySelectorAll('.l12-ev'),
+        verdict = document.querySelector('.l12-verdict');
+    function setClock(t){
+      var m = Math.floor(t/60), s = Math.floor(t%60), d = Math.floor((t%1)*10);
+      clock.innerHTML = m + ':' + String(s).padStart(2,'0') + '<span class="ms">.' + d + '</span>';
+      bar.style.width = ((t-511)/12.2*100) + '%';
+    }
+    if (innerWidth >= 900){
+      var proxy = {t:511.0};
+      var tl = gsap.timeline({scrollTrigger:{trigger:'.l12-pin', start:'top top', end:'+=2400', scrub:.5, pin:true}});
+      tl.to(proxy, {t:523.2, duration:10, ease:'none', onUpdate:function(){ setClock(proxy.t); }}, 0);
+      var at = [0.2, 4.3, 8.9, 9.8];
+      evs.forEach(function(ev,i){ tl.to(ev, {opacity:1, y:0, duration:.5, ease:'power2.out'}, at[i]); });
+      tl.to(flash, {opacity:.5, duration:.06}, 9.95)
+        .to(flash, {opacity:0, duration:.6}, 10.05)
+        .to(verdict, {opacity:1, scale:1, duration:.8, ease:'power2.out'}, 10.3)
+        .to({}, {duration:1.2}, 11.1); // hold before unpin
+    } else {
+      gsap.set(evs, {opacity:1, y:0}); gsap.set(verdict, {opacity:1, scale:1}); setClock(523.2);
+    }
+
+    /* three.js particle storm behind hero — lazy, desktop, pauses offscreen */
+    if (innerWidth >= 1024){
+      import('https://unpkg.com/three@0.160.0/build/three.module.js').then(function(THREE){
+        var cv = document.getElementById('fx'), hero = document.querySelector('.hero');
+        var W = hero.offsetWidth, H = hero.offsetHeight;
+        var renderer = new THREE.WebGLRenderer({canvas:cv, alpha:true, antialias:false});
+        renderer.setSize(W, H, false); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+        var scene = new THREE.Scene();
+        var cam = new THREE.PerspectiveCamera(55, W/H, .1, 100); cam.position.z = 11;
+        function cloud(n, color, size, ring){
+          var pos = new Float32Array(n*3);
+          for (var i=0;i<n;i++){
+            if (ring){
+              var a = Math.random()*Math.PI*2, r = 6.4 + Math.random()*1.8;
+              pos[i*3] = Math.cos(a)*r; pos[i*3+1] = (Math.random()-.5)*1.4 + Math.sin(a*3)*.3; pos[i*3+2] = Math.sin(a)*r*.35 - 2;
+            } else {
+              pos[i*3] = (Math.random()-.5)*22; pos[i*3+1] = (Math.random()-.5)*12; pos[i*3+2] = (Math.random()-.5)*8;
+            }
+          }
+          var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+          var m = new THREE.PointsMaterial({color:color, size:size, transparent:true, opacity: ring?.8:.35,
+            blending:THREE.AdditiveBlending, depthWrite:false});
+          var p = new THREE.Points(g,m); scene.add(p); return p;
+        }
+        var storm = cloud(900, 0xff3b4e, .055, true);
+        var storm2 = cloud(500, 0x6b2bd9, .07, true);
+        var dust = cloud(500, 0x8a93a6, .03, false);
+        var mx = 0, my = 0;
+        addEventListener('mousemove', function(e){ mx = e.clientX/innerWidth - .5; my = e.clientY/innerHeight - .5; }, {passive:true});
+        var running = true, t = 0;
+        new IntersectionObserver(function(en){ running = en[0].isIntersecting; if (running) tick(); }).observe(hero);
+        function tick(){
+          if (!running) return;
+          t += .0022;
+          storm.rotation.y = t; storm2.rotation.y = -t*.7; dust.rotation.y = t*.15;
+          cam.position.x += (mx*1.6 - cam.position.x)*.04;
+          cam.position.y += (-my*1.0 - cam.position.y)*.04;
+          cam.lookAt(0,0,0);
+          renderer.render(scene, cam);
+          requestAnimationFrame(tick);
+        }
+        addEventListener('resize', function(){
+          W = hero.offsetWidth; H = hero.offsetHeight;
+          renderer.setSize(W, H, false); cam.aspect = W/H; cam.updateProjectionMatrix();
+        });
+        tick(); cv.classList.add('on');
+      }).catch(function(){});
+    }
+  });
+})();
 </script>
+<script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
 </body>
 </html>
