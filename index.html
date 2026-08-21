@@ -67,8 +67,10 @@
   --mono:'JetBrains Mono',ui-monospace,monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{overflow-x:clip} /* clip, not hidden: hidden would make body a scroll container and break Lenis */
+@supports not (overflow: clip){html{overflow-x:hidden}}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;overflow-x:clip}
+  -webkit-font-smoothing:antialiased}
 body::before{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.04;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
 ::selection{background:var(--red);color:#fff}
@@ -676,7 +678,7 @@ document.getElementById('yr').textContent = new Date().getFullYear();
       scrollTrigger:{trigger:'.stat', start:'top 75%', once:true}});
 
     /* final CTA stamp */
-    gsap.from('.final .kin', {scale:1.5, opacity:0, duration:.6, ease:'power4.out',
+    gsap.from('.final .kin', {scale:1.2, opacity:0, duration:.6, ease:'power4.out',
       scrollTrigger:{trigger:'.final', start:'top 65%', once:true}});
   });
 })();
