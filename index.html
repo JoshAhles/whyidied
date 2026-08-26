@@ -183,13 +183,31 @@ nav a:hover{color:var(--ink)}
 .gs #cursorlight{opacity:1}
 /* The stage is behind everything, so the hero reserves the space the object
    flies through and the type never lands on top of it. */
+/* A transparent well that reserves the space the object flies through, so the
+   type never lands on top of it.
+
+   IT CARRIES NO LABELS. It used to hold "Recorder · always on" and "drag to
+   rotate", which made sense when the object sat inside a bordered instrument
+   bay. Once the canvas went full-page there was no frame for them to belong to,
+   so they read as two lines of debris floating in empty space. The affordance
+   now appears only when the pointer is actually over the object — nothing floats
+   in the resting state. */
 .stagehole{position:relative; aspect-ratio:1/.86; min-height:300px}
-.stagehole .lbl{position:absolute; top:2px; left:2px}
-.stagehole .hint{
-  position:absolute; bottom:4px; left:0; right:0; text-align:center;
-  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.18em;
-  font-size:10px; color:var(--dim); opacity:.6;
+.stagehole::before,.stagehole::after{
+  content:""; position:absolute; width:14px; height:14px;
+  border:1px solid var(--amber); opacity:0; transition:opacity .3s ease;
+  pointer-events:none;
 }
+.stagehole::before{top:8%; left:6%; border-right:0; border-bottom:0}
+.stagehole::after{bottom:8%; right:6%; border-left:0; border-top:0}
+.stagehole .grab{
+  position:absolute; bottom:8%; left:6%;
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.2em;
+  font-size:10px; color:var(--amber); opacity:0; transition:opacity .3s ease;
+  pointer-events:none;
+}
+.stagehole:hover::before,.stagehole:hover::after,.stagehole:hover .grab{opacity:.75}
+@media (pointer:coarse){.stagehole .grab,.stagehole::before,.stagehole::after{display:none}}
 
 h1{
   font-family:var(--f-display); font-weight:700;
@@ -400,12 +418,11 @@ h1.kin .dot{color:var(--amber)}
 <main>
 
   <!-- ── HERO ──────────────────────────────────────────────────────── -->
-  <section class="hero" data-stage="-1.15,0.05,4.70,0">
+  <section class="hero" data-stage="-0.82,0.04,3.35,0">
     <div class="wrap hero-grid">
 
       <div class="stagehole" aria-hidden="true">
-        <div class="lbl inst dim">Recorder · always on</div>
-        <div class="hint">drag to rotate</div>
+        <span class="grab">drag</span>
       </div>
 
       <div>
@@ -453,7 +470,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── METHOD ────────────────────────────────────────────────────── -->
-  <section id="how" data-stage="1.05,0.00,4.10,0.15">
+  <section id="how" data-stage="0.75,0.00,2.95,0.15">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">01 · Method</span></div>
       <h2 data-focus>Every death, reviewed. Not the ones you remember to clip.</h2>
@@ -489,7 +506,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── EXHIBIT ───────────────────────────────────────────────────── -->
-  <section id="last12" data-stage="-1.30,0.10,6.40,0.55">
+  <section id="last12" data-stage="-0.95,0.07,4.60,0.5">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">02 · Exhibit A — the tape</span></div>
       <h2>The last twelve seconds of the match, reconstructed</h2>
@@ -526,7 +543,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── THE REFUSAL ───────────────────────────────────────────────── -->
-  <section id="refusal" data-stage="1.15,0.00,4.30,0.10">
+  <section id="refusal" data-stage="0.84,0.00,3.10,0.1">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">03 · The refusal</span></div>
       <div class="housing refuse rise">
@@ -551,7 +568,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── CASE LOG ──────────────────────────────────────────────────── -->
-  <section id="progress" data-stage="-0.70,0.14,5.90,0.40">
+  <section id="progress" data-stage="-0.52,0.10,4.25,0.4">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">04 · Case log</span></div>
       <h2>The point is the pattern</h2>
@@ -576,7 +593,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── PRICE ─────────────────────────────────────────────────────── -->
-  <section id="pricing" data-stage="1.55,0.00,6.60,0.65">
+  <section id="pricing" data-stage="1.14,0.00,4.75,0.65">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">05 · Terms</span></div>
       <h2>What a Fortnite coach costs</h2>
@@ -621,7 +638,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── FAQ ───────────────────────────────────────────────────────── -->
-  <section id="faq" data-stage="-1.75,0.05,7.20,0.78">
+  <section id="faq" data-stage="-1.28,0.04,5.20,0.78">
     <div class="wrap" style="max-width:900px">
       <div class="eyebrow"><span class="inst">06 · Questions</span></div>
       <h2>Straight answers</h2>
@@ -690,6 +707,6 @@ h1.kin .dot{color:var(--amber)}
   </div>
 </footer>
 
-<script src="main.js?v=40" defer></script>
+<script src="main.js?v=44" defer></script>
 </body>
 </html>

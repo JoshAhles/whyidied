@@ -232,7 +232,7 @@
          flat-shaded faces look like painted cardboard. */
       " vec3 sky = vec3(0.30,0.36,0.46); vec3 flr = vec3(0.020,0.021,0.024);" +
       " vec3 env = mix(flr, sky, smoothstep(-0.42,0.55,R.y));" +
-      " float amb = 0.14 + 0.70*max(dot(N, normalize(vec3(-0.34,0.62,0.85))),0.0);" +
+      " float amb = 0.20 + 0.80*max(dot(N, normalize(vec3(-0.34,0.62,0.85))),0.0);" +
       /* Anisotropic brushed grain: noise stretched along the surface, projected
          on whichever axis the face points down, so streaks run ALONG a panel
          rather than swimming across it. */
@@ -255,7 +255,7 @@
       /* The lamp lenses themselves: hot core, bright bezel ring. */
       " if(vA.x > 0.02){ float lit = vA.x*uFlick;" +
       "   col = mix(col, vec3(1.0,0.78,0.30), 0.86*lit) + vec3(0.55,0.32,0.05)*lit; }" +
-      " col += vec3(0.78,0.82,0.90)*spec*mix(0.10, 0.85, 1.0-rough);" +" col += vec3(1.0,0.68,0.20)*rim*mix(0.34, 0.60, uTex);" +" col *= mix(0.30, 0.60, uTex);" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
+      " col += vec3(0.78,0.82,0.90)*spec*mix(0.10, 0.85, 1.0-rough);" +" col += vec3(1.0,0.68,0.20)*rim*mix(0.34, 0.60, uTex);" +" col *= mix(0.30, 0.86, uTex);" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
       " gl_FragColor = vec4(col * (1.0 - uDim*0.82), 1.0 - uDim*0.55); }";
 
     function sh(t, src) {
@@ -560,12 +560,17 @@
       var tx = -f.ox + nx * halfW, ty = -f.oy + ny * halfH;
       var len = Math.hypot(tx, ty, AIM_Z) || 1;
       var dx = tx / len, dy = ty / len, dz = AIM_Z / len;
-      return { yaw: Math.atan2(dx, dz), pitch: -Math.asin(Math.max(-1, Math.min(1, dy))) };
+      // Flip when the lens runs down -Z, so the glass faces the target rather
+      // than the mounting bracket.
+      var sgn = LENS[2] < 0 ? -1 : 1;
+      return { yaw: Math.atan2(sgn * dx, sgn * dz),
+               pitch: -Math.asin(Math.max(-1, Math.min(1, dy))) * sgn };
     }
 
+    var lastT = 0;
     var f0 = STAGE[0] || { dist: 5, ox: 0, oy: 0, dim: 0 };
     var cur = MOTION
-      ? { dist: f0.dist * 2.5, ox: f0.ox * 1.7, oy: f0.oy - 0.5, dim: 1, yaw: -1.5, pitch: 0.55 }
+      ? { dist: f0.dist * 1.45, ox: f0.ox * 1.2, oy: f0.oy - 0.22, dim: 0.72, yaw: -0.9, pitch: 0.34 }
       : { dist: f0.dist, ox: f0.ox, oy: f0.oy, dim: f0.dim, yaw: 0.5, pitch: -0.2 };
     var dragYaw = 0, dragPitch = 0;
     var dragging = false, lx = 0, ly = 0;
@@ -600,14 +605,17 @@
       var want = { dist: wf.dist, ox: wf.ox, oy: wf.oy, dim: wf.dim, yaw: wa.yaw, pitch: wa.pitch };
       // Ease toward the track rather than snapping, so a fast scroll reads as a
       // camera catching up instead of a jump cut. Drag decays back into it.
-      var k = MOTION ? 0.075 : 1;
+      var dt = Math.min(0.05, (t - lastT) / 1000) || 0.016;
+      lastT = t;
+      // 1 - e^(-dt/tau): the same settle time at any refresh rate.
+      var k = MOTION ? 1 - Math.exp(-dt / 0.22) : 1;
       cur.yaw += (want.yaw - cur.yaw) * k;
       cur.pitch += (want.pitch - cur.pitch) * k;
       cur.dist += (want.dist - cur.dist) * k;
       cur.ox += (want.ox - cur.ox) * k;
       cur.oy += (want.oy - cur.oy) * k;
       cur.dim += (want.dim - cur.dim) * k;
-      if (!dragging) { dragYaw *= 0.965; dragPitch *= 0.965; }
+      if (!dragging) { var dk = Math.pow(0.965, dt * 60); dragYaw *= dk; dragPitch *= dk; }
 
       var yaw = cur.yaw + dragYaw;
       var pitch = Math.max(-0.9, Math.min(0.9, cur.pitch + dragPitch));
