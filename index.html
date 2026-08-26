@@ -194,6 +194,11 @@ h1 em{font-style:normal; color:var(--amber)}
 }
 .compat li:last-child{border-right:0}
 .compat li:first-child{color:var(--amber)}
+.scarce{
+  margin-top:16px; font-size:14.5px; color:var(--dim);
+  padding-left:13px; border-left:2px solid var(--amber);
+}
+.scarce b{color:var(--ink); font-weight:600}
 
 /* ── Buttons ────────────────────────────────────────────────────────── */
 .cta{display:flex; gap:12px; flex-wrap:wrap; margin-top:24px; align-items:center}
@@ -365,10 +370,16 @@ footer a:hover{color:var(--ink)}
           </div>
         </div>
 
+        <p class="lede" style="margin-top:14px">Most players die to the same two or three
+          mistakes on repeat, and never see it because nobody reviews their own deaths.
+          <b>The point is that you find out which are yours.</b></p>
+
         <div class="cta">
           <a class="btn" href="#waitlist">Join the waitlist</a>
           <a class="btn ghost" href="#last12">See the evidence</a>
         </div>
+        <p class="scarce"><b>100 founders seats</b> at $9.99/mo, locked for as long as you
+          stay. After that it is $14.99.</p>
       </div>
 
     </div>
@@ -600,6 +611,6 @@ footer a:hover{color:var(--ink)}
   </div>
 </footer>
 
-<script src="main.js?v=12" defer></script>
+<script src="main.js?v=13" defer></script>
 </body>
 </html>
