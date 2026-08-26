@@ -361,7 +361,7 @@
         if (OP[i+k] > hi[k]) hi[k] = OP[i+k];
       }
       var span = Math.max(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]) || 1;
-      var sc = 1.40 / span;
+      var sc = 1.62 / span;
       for (i = 0; i < OP.length; i += 3) for (k = 0; k < 3; k++)
         OP[i+k] = (OP[i+k] - (lo[k]+hi[k])/2) * sc;
       return { P: OP, N: ON, A: OA, hasLamps: !!lamp };
