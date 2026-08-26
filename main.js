@@ -211,7 +211,7 @@
     var FS =
       "precision highp float;" +
       "varying vec3 vN; varying vec3 vP; varying vec2 vA;" +
-      "uniform vec3 uCam; uniform float uFlick;" +
+      "uniform vec3 uCam; uniform float uFlick; uniform float uLamps;" +
       "float h(vec2 p){ return fract(sin(dot(p,vec2(41.7,289.1)))*43758.5453); }" +
       "float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);" +
       " return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }" +
@@ -236,16 +236,16 @@
       " metal *= (1.0 - 0.55*seam);" +
       /* Grime pools on upward faces. */
       " metal *= 1.0 - 0.16*smoothstep(0.25,1.0,N.y)*n2(uv*9.0);" +
-      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.46,0.78,0.60));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), 46.0);" +" float rim = pow(1.0 - max(dot(N,V),0.0), 2.6) * max(dot(N, normalize(vec3(-0.75,0.35,-0.55))),0.0);" +
-      " vec3 col = vec3(metal)*amb + env*(0.135 + 0.62*fres);" +
+      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.46,0.78,0.60));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), 46.0);" +" float rim = pow(1.0 - max(dot(N,V),0.0), 4.2) * max(dot(N, normalize(vec3(-0.75,0.35,-0.55))),0.0);" +
+      " vec3 col = vec3(metal)*amb + env*(0.34 + 0.62*fres);" +
       /* Light spill: the lamps throw amber onto the shell around them, which is
          what makes an emissive read as a light source rather than a sticker. */
       " float d = distance(vP, vec3(-0.40,0.30,0.49));" +
-      " col += vec3(1.0,0.70,0.16) * 0.85 * exp(-d*4.0) * uFlick;" +
+      " col += vec3(1.0,0.70,0.16) * 0.85 * exp(-d*4.0) * uFlick * uLamps;" +
       /* The lamp lenses themselves: hot core, bright bezel ring. */
       " if(vA.x > 0.02){ float lit = vA.x*uFlick;" +
       "   col = mix(col, vec3(1.0,0.78,0.30), 0.86*lit) + vec3(0.55,0.32,0.05)*lit; }" +
-      " col += vec3(0.75,0.78,0.84)*spec*0.55;" +" col += vec3(1.0,0.68,0.20)*rim*0.95;" +" col *= 0.40;" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
+      " col += vec3(0.78,0.82,0.90)*spec*0.85;" +" col += vec3(1.0,0.68,0.20)*rim*0.34;" +" col *= 0.30;" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
       " gl_FragColor = vec4(col, 1.0); }";
 
     function sh(t, src) {
@@ -269,9 +269,11 @@
       gl.enableVertexAttribArray(l);
       gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0);
     }
-    function upload(g) {
+    var HAS_LAMPS = 1;
+    function upload(g, lamps) {
       buf(g.P, "aP", 3); buf(g.N, "aN", 3); buf(g.A, "aA", 2);
       COUNT = g.P.length / 3;
+      HAS_LAMPS = lamps ? 1 : 0;
     }
 
     /* ---- GLB geometry, our material ---------------------------------
@@ -356,7 +358,7 @@
         if (OP[i+k] > hi[k]) hi[k] = OP[i+k];
       }
       var span = Math.max(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]) || 1;
-      var sc = 1.9 / span;
+      var sc = 1.52 / span;
       for (i = 0; i < OP.length; i += 3) for (k = 0; k < 3; k++)
         OP[i+k] = (OP[i+k] - (lo[k]+hi[k])/2) * sc;
       return { P: OP, N: ON, A: OA };
@@ -365,16 +367,24 @@
     /* The procedural object holds the hero until a model is proven to load. A
        landing page cannot have an empty hero while a file is fetched, and a
        broken parse must not take the section with it. */
-    upload(PROC);
-    fetch("hero.glb", { cache: "force-cache" })
-      .then(function (r) { if (!r.ok) throw new Error("no hero.glb"); return r.arrayBuffer(); })
-      .then(function (ab) { upload(parseGLB(ab)); })
-      .catch(function (e) { if (String(e.message).indexOf("no hero.glb") < 0) console.warn("hero.glb:", e.message); });
+    upload(PROC, true);
+    // NOT force-cache. The page was loaded several times before hero.glb existed,
+    // so force-cache happily replayed the cached 404 and the model never arrived
+    // — with no error to show for it, because a 404 is a successful fetch.
+    fetch("hero.glb")
+      .then(function (r) { if (!r.ok) throw new Error("no hero.glb (" + r.status + ")"); return r.arrayBuffer(); })
+      .then(function (ab) {
+        var g = parseGLB(ab);
+        upload(g, false);
+        console.log("hero: hero.glb loaded,", g.P.length / 9, "triangles");
+      })
+      .catch(function (e) { console.log("hero: procedural (" + e.message + ")"); });
 
     var uMVP = gl.getUniformLocation(pr, "uMVP"),
         uM = gl.getUniformLocation(pr, "uM"),
         uCam = gl.getUniformLocation(pr, "uCam"),
-        uFlick = gl.getUniformLocation(pr, "uFlick");
+        uFlick = gl.getUniformLocation(pr, "uFlick"),
+        uLamps = gl.getUniformLocation(pr, "uLamps");
 
     gl.enable(gl.DEPTH_TEST);
     // NOT culling: the winding rule for chamfer corners was wrong in half the
@@ -436,6 +446,7 @@
       /* A powered lamp is never perfectly steady, and anything larger than a few
          percent becomes a distraction rather than a detail. */
       gl.uniform1f(uFlick, 0.97 + 0.03 * Math.sin(t * 0.011) * Math.sin(t * 0.037));
+      gl.uniform1f(uLamps, HAS_LAMPS);
       gl.drawArrays(gl.TRIANGLES, 0, COUNT);
     }
 
