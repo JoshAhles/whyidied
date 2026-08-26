@@ -545,6 +545,21 @@
      *  anything beside it. */
     var AIM_Z = 1.35;
     var ease = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+    /** Portrait correction. `ox` is in view units, so a narrow viewport needs
+     *  both a bigger distance and a much smaller lateral offset — scaling one
+     *  without the other either shrinks it into nothing or throws it off-screen. */
+    var STACK_AT = 900;   // the same breakpoint the stylesheet uses
+    function forViewport(f) {
+      if (innerWidth >= STACK_AT) return f;
+      var narrow = Math.min(1, (STACK_AT - innerWidth) / 520);
+      return {
+        // Further away and centred, sitting in the band above the copy.
+        dist: f.dist * (1 + 1.05 * narrow),
+        ox: f.ox * (1 - 0.96 * narrow),
+        oy: f.oy + 0.95 * narrow,
+        dim: f.dim,
+      };
+    }
     function frameAt() {
       if (!STAGE.length) return { dist: 5, ox: 0, oy: 0, dim: 0 };
       var mid = innerHeight / 2, i;
@@ -553,21 +568,21 @@
         var r = s.el.getBoundingClientRect();
         return r.top + r.height / 2;
       });
-      if (c[0] >= mid) return STAGE[0];
+      if (c[0] >= mid) return forViewport(STAGE[0]);
       for (i = 0; i < STAGE.length - 1; i++) {
         if (c[i] <= mid && c[i + 1] >= mid) {
           var span = c[i + 1] - c[i] || 1;
           var t = ease(Math.max(0, Math.min(1, (mid - c[i]) / span)));
           var a = STAGE[i], b = STAGE[i + 1];
-          return {
+          return forViewport({
             dist: a.dist + (b.dist - a.dist) * t,
             ox: a.ox + (b.ox - a.ox) * t,
             oy: a.oy + (b.oy - a.oy) * t,
             dim: a.dim + (b.dim - a.dim) * t,
-          };
+          });
         }
       }
-      return STAGE[STAGE.length - 1];
+      return forViewport(STAGE[STAGE.length - 1]);
     }
 
     /** Where the lens should point, in the object's own space. */
@@ -976,7 +991,13 @@
     if (!box) return;
     var track = box.querySelector(".htrack");
     if (!track) return;
-    if (!MOTION) { box.style.overflowX = "auto"; return; }
+    var touch = matchMedia("(pointer: coarse)").matches || innerWidth < 760;
+    if (!MOTION || touch) {
+      box.style.overflowX = "auto";
+      box.style.scrollSnapType = "x proximity";
+      track.style.transform = "none";
+      return;
+    }
     var x = 0, tx = 0;
     function measure() {
       var over = track.scrollWidth - box.clientWidth;

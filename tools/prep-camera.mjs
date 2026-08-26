@@ -186,6 +186,41 @@ for (const n of scene.nodes) walk(n, ident());
 
 if (!P.length) throw new Error("no geometry survived — check --no-tripod");
 
+/* ---- INDEX THE GEOMETRY ---------------------------------------------
+ * Emitting three unique vertices per triangle is the simple thing, and it makes
+ * the buffer roughly three times larger than it needs to be — 1.86 MB of the
+ * 3.17 MB asset. Deduplicating on the full vertex (position, normal, uv, part)
+ * keeps every hard edge, because a hard edge IS two vertices with different
+ * normals and they will not merge. Quantised to 1e-5 so float noise from the
+ * transform bake does not defeat the match.
+ */
+const q = (x) => Math.round(x * 100000) / 100000;
+const seen = new Map();
+const iP = [], iN = [], iUV = [], iPART = [], IDX = [];
+for (let v = 0; v < P.length / 3; v++) {
+  const key = [
+    q(P[v*3]), q(P[v*3+1]), q(P[v*3+2]),
+    q(N[v*3]), q(N[v*3+1]), q(N[v*3+2]),
+    q(UV[v*2] || 0), q(UV[v*2+1] || 0),
+    PART[v] || 0,
+  ].join(",");
+  let at = seen.get(key);
+  if (at === undefined) {
+    at = iP.length / 3;
+    seen.set(key, at);
+    iP.push(P[v*3], P[v*3+1], P[v*3+2]);
+    iN.push(N[v*3], N[v*3+1], N[v*3+2]);
+    iUV.push(UV[v*2] || 0, UV[v*2+1] || 0);
+    iPART.push(PART[v] || 0);
+  }
+  IDX.push(at);
+}
+console.log(`indexed   ${P.length/3} vertices -> ${iP.length/3} unique (${(100 - iP.length/P.length*100).toFixed(0)}% fewer)`);
+P.length = 0; P.push(...iP);
+N.length = 0; N.push(...iN);
+UV.length = 0; UV.push(...iUV);
+PART.length = 0; PART.push(...iPART);
+
 /* ---- write a lean geometry-only GLB ---------------------------------- */
 const pos = new Float32Array(P), nrm = new Float32Array(N);
 const col = new Float32Array((P.length / 3) * 4);
@@ -228,7 +263,9 @@ if (texDir) {
 
 const uvArr = new Float32Array(UV);
 const pad4 = (n) => (4 - (n % 4)) % 4;
-const parts = [Buffer.from(pos.buffer), Buffer.from(nrm.buffer), Buffer.from(col.buffer), Buffer.from(uvArr.buffer)];
+const idxArr = iP.length / 3 > 65535 ? new Uint32Array(IDX) : new Uint16Array(IDX);
+const parts = [Buffer.from(pos.buffer), Buffer.from(nrm.buffer), Buffer.from(col.buffer),
+               Buffer.from(uvArr.buffer), Buffer.from(idxArr.buffer)];
 for (const t of texFiles) parts.push(t.data, Buffer.alloc(pad4(t.data.length), 0));
 const offs = []; let cur = 0;
 for (const p of parts) { offs.push(cur); cur += p.length; }
@@ -241,7 +278,7 @@ const gltf = {
   scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: "hero" }],
   meshes: [{ name: "hero", primitives: [{
     attributes: Object.assign({ POSITION: 0, NORMAL: 1, COLOR_0: 2 }, texFiles.length ? { TEXCOORD_0: 3 } : {}),
-    mode: 4, material: texFiles.length ? 0 : undefined,
+    mode: 4, material: texFiles.length ? 0 : undefined, indices: 4,
   }] }],
   buffers: [{ byteLength: binOut.length }],
   bufferViews: [],
@@ -255,13 +292,16 @@ const gltf = {
 for (let i = 0; i < 4; i++) {
   gltf.bufferViews.push({ buffer: 0, byteOffset: offs[i], byteLength: parts[i].length, target: 34962 });
 }
+gltf.bufferViews.push({ buffer: 0, byteOffset: offs[4], byteLength: parts[4].length, target: 34963 });
+gltf.accessors.push({ bufferView: 4, componentType: idxArr.BYTES_PER_ELEMENT === 4 ? 5125 : 5123,
+                      count: IDX.length, type: "SCALAR" });
 if (texFiles.length) {
   gltf.accessors.push({ bufferView: 3, componentType: 5126, count, type: "VEC2" });
   gltf.images = []; gltf.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }];
   gltf.textures = []; 
   texFiles.forEach((t, i) => {
     const vi = gltf.bufferViews.length;
-    gltf.bufferViews.push({ buffer: 0, byteOffset: offs[4 + i * 2], byteLength: t.data.length });
+    gltf.bufferViews.push({ buffer: 0, byteOffset: offs[5 + i * 2], byteLength: t.data.length });
     gltf.images.push({ bufferView: vi, mimeType: t.mime, name: t.name });
     gltf.textures.push({ sampler: 0, source: i });
   });
@@ -286,5 +326,5 @@ const bh = Buffer.alloc(8); bh.writeUInt32LE(bc.length, 0); bh.writeUInt32LE(0x0
 
 const out = Buffer.concat([header, jh, jc, bh, bc]);
 writeFileSync(new URL("../hero.glb", import.meta.url), out);
-console.log(`hero.glb  ${(out.length / 1024 / 1024).toFixed(2)} MB  ${count / 3} triangles${noTripod ? "  (tripod dropped)" : ""}`);
+console.log(`hero.glb  ${(out.length / 1024 / 1024).toFixed(2)} MB  ${IDX.length / 3} triangles, ${count} vertices${noTripod ? "  (tripod dropped)" : ""}`);
 console.log(`bounds    ${min.map((n) => n.toFixed(2)).join(", ")}  ->  ${max.map((n) => n.toFixed(2)).join(", ")}`);

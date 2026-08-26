@@ -31,6 +31,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230A0D11'/><rect x='14' y='30' width='72' height='44' fill='none' stroke='%23263038' stroke-width='5'/><circle cx='38' cy='52' r='7' fill='%23FFB627'/><circle cx='62' cy='52' r='7' fill='%23263038'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/site.css">
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script type="application/ld+json">
 {
@@ -64,21 +65,8 @@
    Tokens — the app's palette, verbatim (packages/review-ui/src/tokens.css).
    The landing page and the product must not be two different brands.
    ───────────────────────────────────────────────────────────────────────── */
-:root{
-  --bg:#0A0D11;        /* gunmetal ground; never pure black — a bezel needs somewhere darker to sit */
-  --bay:#10151B;       /* recessed instrument bay */
-  --panel:#141A21;     /* panel face */
-  --bezel:#263038;     /* hairline housing */
-  --ink:#E7E4DC;       /* aluminium, warm-shifted toward the amber */
-  --dim:#8C9099;
-  --amber:#FFB627;     /* phosphor. The reading colour, and the ONLY accent */
-  --fault:#FF4438;     /* semantic: fault. Never decorative */
-  --ok:#46C98B;        /* semantic: recovering */
-  --f-display:"Saira Condensed","Barlow",system-ui,sans-serif;
-  --f-ui:"Barlow",system-ui,-apple-system,sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --gut:clamp(20px,5vw,64px);
-}
+/* Tokens live in site.css, which every page links — see the note there. The
+   rules below are index-only components. */
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{overflow-x:clip}
 html{scroll-behavior:smooth}
@@ -191,6 +179,16 @@ nav a:hover{color:var(--ink)}
    now appears only when the pointer is actually over the object — nothing floats
    in the resting state. */
 .stagehole{position:relative; aspect-ratio:1/.86; min-height:300px}
+/* On a phone the hero is one column, so this well becomes the band the object
+   sits in ABOVE the copy. A square aspect there would push the headline below
+   the fold for no benefit. */
+@media(max-width:900px){
+  .stagehole{aspect-ratio:auto; min-height:0; height:34vh; max-height:300px}
+}
+@media(max-width:760px){
+  .card{scroll-snap-align:start}
+  .hscroll{padding-bottom:6px}
+}
 /* No frame, no hint: they advertised a drag that no longer exists. */
 
 h1{
@@ -689,6 +687,6 @@ h1.kin .dot{color:var(--amber)}
   </div>
 </footer>
 
-<script src="main.js?v=47" defer></script>
+<script src="main.js?v=51" defer></script>
 </body>
 </html>

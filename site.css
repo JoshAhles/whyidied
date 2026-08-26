@@ -1,0 +1,161 @@
+/* WhyIDied — the shared layer: tokens, base, header, footer, prose.
+ *
+ * WHY THIS FILE EXISTS. The three guide pages were still on the pre-rebuild
+ * design — Space Grotesk, a different palette, different everything — so
+ * following a footer link dropped you onto what looked like an unrelated site.
+ * Those pages exist to be found by search, which makes them a likely FIRST
+ * impression rather than an afterthought.
+ *
+ * The tokens live here and only here. index.html keeps its own component rules
+ * inline because they are page-specific, but it no longer carries a second copy
+ * of the palette: two copies of a colour is how a design system quietly splits
+ * in half, which has already happened once in the app repo (theme.css inheriting
+ * over tokens.css and reflowing the desktop shell).
+ */
+:root{
+  --bg:#0A0D11;        /* gunmetal ground; never pure black — a bezel needs somewhere darker to sit */
+  --bay:#10151B;       /* recessed instrument bay */
+  --panel:#141A21;     /* panel face */
+  --bezel:#263038;     /* hairline housing */
+  --ink:#E7E4DC;       /* aluminium, warm-shifted toward the amber */
+  --dim:#8C9099;
+  --amber:#FFB627;     /* phosphor. The reading colour, and the ONLY accent */
+  --fault:#FF4438;     /* semantic: fault. Never decorative */
+  --ok:#46C98B;        /* semantic: recovering */
+  --f-display:"Saira Condensed","Barlow",system-ui,sans-serif;
+  --f-ui:"Barlow",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --gut:clamp(20px,5vw,64px);
+}
+
+/* ── base ─────────────────────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{overflow-x:clip}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--f-ui); font-size:17px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:0 var(--gut)}
+:focus-visible{outline:2px solid var(--amber); outline-offset:3px}
+
+/* ── the two registers ────────────────────────────────────────────────── */
+.inst{
+  font-family:var(--f-display); text-transform:uppercase;
+  letter-spacing:.13em; font-weight:600; color:var(--amber);
+  font-size:12px; line-height:1.3;
+}
+.inst.dim{color:var(--dim)}
+.num{font-family:var(--f-mono); font-variant-numeric:tabular-nums; letter-spacing:.02em}
+
+/* ── header ───────────────────────────────────────────────────────────── */
+header{padding:22px 0 0; position:relative; z-index:1}
+.bar{display:flex; align-items:center; justify-content:space-between; gap:20px}
+/* The wordmark is ONE flex item. Splitting the text nodes puts a gap inside it
+   and it reads "WHY i DIED". */
+.mark{
+  font-family:var(--f-display); font-weight:700; font-size:22px;
+  letter-spacing:.06em; color:var(--ink); text-decoration:none; white-space:nowrap;
+}
+.mark i{font-style:normal; color:var(--amber); text-shadow:0 0 10px rgba(255,182,39,.75)}
+.mark b{font-weight:700; color:var(--fault)}
+header nav{display:flex; gap:26px; align-items:center}
+header nav a{color:var(--dim); text-decoration:none; font-size:14px; letter-spacing:.02em}
+header nav a:hover{color:var(--ink)}
+@media(max-width:760px){header nav .hide-s{display:none}}
+
+/* ── prose, for the guides ────────────────────────────────────────────── */
+.prose{max-width:74ch; margin:0 auto; padding:clamp(34px,6vw,72px) 0}
+.prose h1{
+  font-family:var(--f-display); font-weight:700;
+  font-size:clamp(31px,5vw,54px); line-height:1.02; letter-spacing:-.004em;
+  text-wrap:balance; margin-bottom:18px;
+}
+.prose h2{
+  font-family:var(--f-display); font-weight:700; text-transform:uppercase;
+  font-size:clamp(21px,2.7vw,30px); line-height:1.08; letter-spacing:.01em;
+  margin:44px 0 12px; text-wrap:balance;
+}
+.prose h3{
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.05em;
+  font-size:18px; font-weight:600; margin:28px 0 8px;
+}
+.prose p{margin-bottom:18px; color:#C9C6BE}
+.prose p strong,.prose li strong{color:var(--ink); font-weight:600}
+.prose ul,.prose ol{margin:0 0 20px 22px; color:#C9C6BE}
+.prose li{margin-bottom:9px}
+.prose a{color:var(--amber); text-decoration:none; border-bottom:1px solid rgba(255,182,39,.35)}
+.prose a:hover{border-bottom-color:var(--amber)}
+.prose .lede{font-size:clamp(17px,1.7vw,20px); color:var(--ink); margin-bottom:26px}
+/* Square housings with hairline bezels. No rounded cards — that is the generic
+   tell the brand was called out for. */
+.prose blockquote{
+  border:1px solid var(--bezel); background:var(--panel);
+  padding:18px 20px; margin:26px 0; color:#C9C6BE;
+}
+.prose blockquote p:last-child{margin-bottom:0}
+.prose hr{border:0; border-top:1px solid var(--bezel); margin:38px 0}
+.prose table{width:100%; border-collapse:collapse; margin:24px 0; font-size:15.5px; display:block; overflow-x:auto}
+.prose th,.prose td{border:1px solid var(--bezel); padding:9px 12px; text-align:left}
+.prose th{font-family:var(--f-display); text-transform:uppercase; letter-spacing:.06em; font-size:12px; color:var(--dim)}
+
+/* ── buttons ──────────────────────────────────────────────────────────── */
+.btn{
+  display:inline-block; font-family:var(--f-display); text-transform:uppercase;
+  letter-spacing:.1em; font-weight:700; font-size:14px;
+  padding:13px 24px; border:1px solid var(--amber); color:var(--bg);
+  background:var(--amber); text-decoration:none; cursor:pointer;
+  transition:filter .16s ease, transform .16s ease;
+}
+.btn:hover{filter:brightness(1.12)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:transparent; color:var(--amber)}
+.btn.ghost:hover{background:rgba(255,182,39,.09)}
+
+/* ── footer ───────────────────────────────────────────────────────────── */
+footer{padding:44px 0 56px; border-top:1px solid var(--bezel); color:var(--dim); font-size:14px; position:relative; z-index:1}
+footer a{color:var(--dim)}
+footer a:hover{color:var(--ink)}
+.fl{display:flex; gap:22px; flex-wrap:wrap; margin-bottom:14px}
+
+/* ── the guide pages ──────────────────────────────────────────────────────
+   Their markup predates the rebuild and is left alone; the classes it already
+   uses are styled here instead. Rewriting their HTML to match a newer component
+   set would risk the content for no gain — these pages are read, not operated. */
+nav > .wrap{display:flex; width:100%; align-items:center; justify-content:space-between; gap:20px; padding-top:22px}
+.brand{
+  font-family:var(--f-display); font-weight:700; font-size:22px; letter-spacing:.06em;
+  color:var(--ink); text-decoration:none; white-space:nowrap;
+}
+.brand .q{color:var(--fault)}
+.cta{
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.1em;
+  font-size:12.5px; font-weight:600; color:var(--amber); text-decoration:none;
+}
+.cta:hover{filter:brightness(1.15)}
+.crumb{
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.11em;
+  font-size:10.5px; color:var(--dim); padding:26px 0 0;
+}
+.crumb a{color:var(--dim); text-decoration:none}
+.crumb a:hover{color:var(--amber)}
+.meta{
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.14em;
+  font-size:11px; color:var(--dim); margin-bottom:22px;
+}
+/* A taxonomy node, so it reads in the instrument register — the same vocabulary
+   the product itself uses for these. */
+.tag{
+  display:inline-block; font-family:var(--f-mono); font-size:11.5px;
+  color:var(--amber); border:1px solid var(--bezel); padding:2px 8px;
+  margin-bottom:12px; letter-spacing:.02em;
+}
+/* Square housing, hairline bezel, amber rail — the correction is the payoff of
+   each section, so it gets the one accent on the page. */
+.fix,.callout{
+  border:1px solid var(--bezel); border-left:2px solid var(--amber);
+  background:var(--panel); padding:16px 18px; margin:16px 0 22px; color:#C9C6BE;
+}
+.fix b,.callout b{color:var(--ink)}
