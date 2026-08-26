@@ -202,16 +202,17 @@
 
     /* ---- program --------------------------------------------------- */
     var VS =
-      "attribute vec3 aP; attribute vec3 aN; attribute vec2 aA;" +
+      "attribute vec3 aP; attribute vec3 aN; attribute vec2 aA; attribute vec2 aUV;" +
       "uniform mat4 uMVP; uniform mat4 uM;" +
-      "varying vec3 vN; varying vec3 vP; varying vec2 vA;" +
-      "void main(){ vN = mat3(uM)*aN; vP = (uM*vec4(aP,1.0)).xyz; vA = aA;" +
+      "varying vec3 vN; varying vec3 vP; varying vec2 vA; varying vec2 vUV;" +
+      "void main(){ vN = mat3(uM)*aN; vP = (uM*vec4(aP,1.0)).xyz; vA = aA; vUV = aUV;" +
       " gl_Position = uMVP*vec4(aP,1.0); }";
 
     var FS =
       "precision highp float;" +
-      "varying vec3 vN; varying vec3 vP; varying vec2 vA;" +
+      "varying vec3 vN; varying vec3 vP; varying vec2 vA; varying vec2 vUV;" +
       "uniform vec3 uCam; uniform float uFlick; uniform float uLamps;" +
+      "uniform sampler2D uDiff; uniform sampler2D uARM; uniform float uTex;" +
       "float h(vec2 p){ return fract(sin(dot(p,vec2(41.7,289.1)))*43758.5453); }" +
       "float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);" +
       " return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }" +
@@ -220,15 +221,15 @@
       /* Fake studio environment. Cool sky above, dark warm floor below. This is
          the single biggest thing that makes metal read as metal — without it,
          flat-shaded faces look like painted cardboard. */
-      " vec3 sky = vec3(0.235,0.285,0.355); vec3 flr = vec3(0.012,0.011,0.010);" +
+      " vec3 sky = vec3(0.30,0.36,0.46); vec3 flr = vec3(0.020,0.021,0.024);" +
       " vec3 env = mix(flr, sky, smoothstep(-0.42,0.55,R.y));" +
-      " float amb = 0.11 + 0.62*max(dot(N, normalize(vec3(-0.34,0.62,0.85))),0.0);" +
+      " float amb = 0.14 + 0.70*max(dot(N, normalize(vec3(-0.34,0.62,0.85))),0.0);" +
       /* Anisotropic brushed grain: noise stretched along the surface, projected
          on whichever axis the face points down, so streaks run ALONG a panel
          rather than swimming across it. */
       " vec3 an = abs(N); vec2 uv = an.z>an.x&&an.z>an.y ? vP.xy : (an.x>an.y ? vP.zy : vP.xz);" +
       " float grain = n2(vec2(uv.x*90.0, uv.y*3.5))*0.6 + n2(vec2(uv.x*260.0, uv.y*6.0))*0.4;" +
-      " float metal = 0.060 + 0.026*grain;" +
+      " float metal = 0.060 + 0.026*grain;" +" vec3 base = vec3(metal); float rough = 0.42; float ao = 1.0; float mtl = 1.0;" +" if(uTex > 0.5){ base = texture2D(uDiff, vUV).rgb;" +"   vec3 arm = texture2D(uARM, vUV).rgb; ao = arm.r; rough = clamp(arm.g,0.05,1.0); mtl = arm.b;" +"   float lum = dot(base, vec3(0.299,0.587,0.114));" +"   base = mix(base, lum*vec3(0.80,0.85,0.97), 0.92); }" +
       /* Panel seams: single-axis grooves with a worn upper lip. Two axes read as
          a waffle; one reads as machining. */
       " float seam = 0.0;" +
@@ -236,8 +237,8 @@
       " metal *= (1.0 - 0.55*seam);" +
       /* Grime pools on upward faces. */
       " metal *= 1.0 - 0.16*smoothstep(0.25,1.0,N.y)*n2(uv*9.0);" +
-      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.34,0.62,0.85));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), 46.0);" +" float rim = pow(1.0 - max(dot(N,V),0.0), 4.2) * max(dot(N, normalize(vec3(-0.75,0.35,-0.55))),0.0);" +
-      " vec3 col = vec3(metal)*amb + env*(0.26 + 0.70*fres);" +
+      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.34,0.62,0.85));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), mix(6.0, 92.0, 1.0-rough));" +" float rim = pow(1.0 - max(dot(N,V),0.0), 6.5) * max(dot(N, normalize(vec3(-0.78,0.30,-0.52))),0.0);" +
+      " vec3 col = base*amb*ao + env*mix(0.10, 0.26 + 0.70*fres, mtl)*(1.0 - 0.75*rough);" +
       /* Light spill: the lamps throw amber onto the shell around them, which is
          what makes an emissive read as a light source rather than a sticker. */
       " float d = distance(vP, vec3(-0.40,0.30,0.49));" +
@@ -245,7 +246,7 @@
       /* The lamp lenses themselves: hot core, bright bezel ring. */
       " if(vA.x > 0.02){ float lit = vA.x*uFlick;" +
       "   col = mix(col, vec3(1.0,0.78,0.30), 0.86*lit) + vec3(0.55,0.32,0.05)*lit; }" +
-      " col += vec3(0.78,0.82,0.90)*spec*0.85;" +" col += vec3(1.0,0.68,0.20)*rim*0.34;" +" col *= 0.30;" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
+      " col += vec3(0.78,0.82,0.90)*spec*mix(0.10, 0.85, 1.0-rough);" +" col += vec3(1.0,0.68,0.20)*rim*mix(0.34, 0.60, uTex);" +" col *= mix(0.30, 0.60, uTex);" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
       " gl_FragColor = vec4(col, 1.0); }";
 
     function sh(t, src) {
@@ -269,11 +270,43 @@
       gl.enableVertexAttribArray(l);
       gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0);
     }
-    var HAS_LAMPS = 1;
+    var HAS_LAMPS = 1, HAS_TEX = 0;
     function upload(g, lamps) {
       buf(g.P, "aP", 3); buf(g.N, "aN", 3); buf(g.A, "aA", 2);
+      buf(g.UV || new Float32Array((g.P.length / 3) * 2), "aUV", 2);
       COUNT = g.P.length / 3;
       HAS_LAMPS = lamps ? 1 : 0;
+    }
+
+    /** Bind one image to a texture unit. The object renders untextured until the
+     *  maps decode, which is correct: a hero that waits for 1 MB of JPEG before
+     *  showing anything is worse than one that sharpens a moment later. */
+    function loadTex(url, unit, uniformName) {
+      var tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([90, 90, 90]));
+      var img = new Image();
+      img.onload = function () {
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+        var pot = (img.width & (img.width - 1)) === 0 && (img.height & (img.height - 1)) === 0;
+        if (pot) {
+          gl.generateMipmap(gl.TEXTURE_2D);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        } else {
+          // Non-power-of-two cannot wrap or mip in WebGL1; clamping keeps it from
+          // rendering black rather than merely soft.
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+      gl.uniform1i(gl.getUniformLocation(pr, uniformName), unit);
     }
 
     /* ---- GLB geometry, our material ---------------------------------
@@ -332,17 +365,20 @@
       var pos = read(prim.attributes.POSITION);
       var nrm = prim.attributes.NORMAL !== undefined ? read(prim.attributes.NORMAL) : null;
       var lamp = prim.attributes.COLOR_0 !== undefined ? read(prim.attributes.COLOR_0) : null;
+      var uv = prim.attributes.TEXCOORD_0 !== undefined ? read(prim.attributes.TEXCOORD_0) : null;
       var lampStride = lamp && json.accessors[prim.attributes.COLOR_0].type === "VEC3" ? 3 : 4;
       var idx = prim.indices !== undefined ? read(prim.indices) : null;
       var n = idx ? idx.length : pos.length / 3;
 
       var OP = new Float32Array(n * 3), ON = new Float32Array(n * 3), OA = new Float32Array(n * 2);
+      var OU = new Float32Array(n * 2);
       var i, k, v;
       for (i = 0; i < n; i++) {
         v = idx ? idx[i] : i;
         OP[i * 3] = pos[v * 3]; OP[i * 3 + 1] = pos[v * 3 + 1]; OP[i * 3 + 2] = pos[v * 3 + 2];
         if (nrm) { ON[i * 3] = nrm[v * 3]; ON[i * 3 + 1] = nrm[v * 3 + 1]; ON[i * 3 + 2] = nrm[v * 3 + 2]; }
         if (lamp) OA[i * 2] = lamp[v * lampStride];
+        if (uv) { OU[i * 2] = uv[v * 2]; OU[i * 2 + 1] = uv[v * 2 + 1]; }
       }
       if (!nrm) {                       // flat normals from the triangles themselves
         for (i = 0; i < n; i += 3) {
@@ -364,7 +400,17 @@
       var sc = 1.62 / span;
       for (i = 0; i < OP.length; i += 3) for (k = 0; k < 3; k++)
         OP[i+k] = (OP[i+k] - (lo[k]+hi[k])/2) * sc;
-      return { P: OP, N: ON, A: OA, hasLamps: !!lamp };
+      // Images live in bufferViews, so they come across in the same fetch. A
+      // blob URL is the shortest path from those bytes to something an <img>
+      // will decode, and the browser does the JPEG work off the main thread.
+      var imgs = (json.images || []).map(function (im) {
+        var bv = json.bufferViews[im.bufferView];
+        var bytes = new Uint8Array(bin, bv.byteOffset || 0, bv.byteLength);
+        return URL.createObjectURL(new Blob([bytes], { type: im.mimeType || "image/jpeg" }));
+      });
+      var lit = false;
+      if (lamp) for (var q = 0; q < OA.length; q += 2) if (OA[q] > 0.02) { lit = true; break; }
+      return { P: OP, N: ON, A: OA, UV: OU, hasLamps: lit, images: imgs };
     }
 
     /* The procedural object holds the hero until a model is proven to load. A
@@ -379,6 +425,11 @@
       .then(function (ab) {
         var g = parseGLB(ab);
         upload(g, g.hasLamps);
+        if (g.images && g.images.length >= 2) {
+          loadTex(g.images[0], 0, "uDiff");
+          loadTex(g.images[1], 1, "uARM");
+          HAS_TEX = 1;
+        }
         console.log("hero: hero.glb loaded,", g.P.length / 9, "triangles");
       })
       .catch(function (e) { console.log("hero: procedural (" + e.message + ")"); });
@@ -387,7 +438,8 @@
         uM = gl.getUniformLocation(pr, "uM"),
         uCam = gl.getUniformLocation(pr, "uCam"),
         uFlick = gl.getUniformLocation(pr, "uFlick"),
-        uLamps = gl.getUniformLocation(pr, "uLamps");
+        uLamps = gl.getUniformLocation(pr, "uLamps"),
+        uTex = gl.getUniformLocation(pr, "uTex");
 
     gl.enable(gl.DEPTH_TEST);
     // NOT culling: the winding rule for chamfer corners was wrong in half the
@@ -421,27 +473,66 @@
      *
      * `ox` shifts the object sideways in view space, which is what lets it swap
      * sides of the page between sections without moving any DOM. */
-    var KEYS = [
-      { at: 0.00, yaw: 0.62, pitch: -0.26, dist: 4.70, ox: -1.15, oy: 0.05 },
-      { at: 0.17, yaw: 1.50, pitch: -0.06, dist: 3.90, ox:  1.02, oy: 0.00 },
-      { at: 0.37, yaw: 2.55, pitch: -0.48, dist: 5.40, ox: -0.88, oy: 0.10 },
-      { at: 0.56, yaw: 3.45, pitch:  0.16, dist: 4.20, ox:  1.14, oy: 0.00 },
-      { at: 0.76, yaw: 4.30, pitch: -0.30, dist: 6.20, ox:  0.00, oy: 0.14 },
-      { at: 1.00, yaw: 5.10, pitch: -0.18, dist: 4.90, ox: -0.80, oy: 0.00 },
+    /* IT IS A CAMERA, SO IT SHOULD AIM. Spinning it on a scroll percentage was
+     * arbitrary — and it desynced from the page, because a fraction of total
+     * scroll height has nothing to do with where a section actually is. The lens
+     * now points at the focal element nearest the middle of the viewport, so it
+     * is looking at whatever you are reading, and the motion is anchored to the
+     * content instead of to a number.
+     *
+     * Only the framing stays on a track: how far away it sits and which side of
+     * the page it occupies. */
+    var FRAME = [
+      { at: 0.00, dist: 4.70, ox: -1.15, oy: 0.05 },
+      { at: 0.20, dist: 4.10, ox:  1.02, oy: 0.00 },
+      { at: 0.42, dist: 5.20, ox: -0.92, oy: 0.08 },
+      { at: 0.62, dist: 4.30, ox:  1.10, oy: 0.00 },
+      { at: 0.82, dist: 5.60, ox: -0.60, oy: 0.10 },
+      { at: 1.00, dist: 4.80, ox:  0.90, oy: 0.00 },
     ];
+    var FOCUS = [].slice.call(document.querySelectorAll("[data-focus]"));
+    /** The lens runs down the model's long axis. Established by measuring the
+     *  mesh rather than guessing: the barrel is the Z extent. */
+    var LENS = [0, 0, 1];
+    /** How far in front of itself the target sits. Larger reads as a gentler
+     *  turn; at zero the camera would swing a full 90 degrees to look at
+     *  anything beside it. */
+    var AIM_Z = 1.35;
     var ease = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
-    function track(p) {
+    function frameAt(p) {
       var i = 0;
-      while (i < KEYS.length - 2 && p > KEYS[i + 1].at) i++;
-      var a = KEYS[i], b = KEYS[i + 1];
+      while (i < FRAME.length - 2 && p > FRAME[i + 1].at) i++;
+      var a = FRAME[i], b = FRAME[i + 1];
       var t = ease(Math.max(0, Math.min(1, (p - a.at) / (b.at - a.at || 1))));
-      return {
-        yaw: a.yaw + (b.yaw - a.yaw) * t, pitch: a.pitch + (b.pitch - a.pitch) * t,
-        dist: a.dist + (b.dist - a.dist) * t,
-        ox: a.ox + (b.ox - a.ox) * t, oy: a.oy + (b.oy - a.oy) * t,
-      };
+      return { dist: a.dist + (b.dist - a.dist) * t,
+               ox: a.ox + (b.ox - a.ox) * t, oy: a.oy + (b.oy - a.oy) * t };
     }
-    var cur = track(0), dragYaw = 0, dragPitch = 0;
+
+    /** Where the lens should point, in the object's own space. */
+    function aimAt(f) {
+      var mid = innerHeight / 2, best = null, bestD = Infinity;
+      for (var i = 0; i < FOCUS.length; i++) {
+        var r = FOCUS[i].getBoundingClientRect();
+        if (r.height === 0) continue;
+        var d = Math.abs(r.top + r.height / 2 - mid);
+        if (d < bestD) { bestD = d; best = r; }
+      }
+      if (!best) return { yaw: 0.5, pitch: -0.2 };
+      // Screen point -> the world plane the object sits in. The eye is at
+      // (-ox, -oy, dist) looking down -Z, and the object is at the origin.
+      var halfH = Math.tan(0.36) * f.dist;
+      var halfW = halfH * (innerWidth / innerHeight);
+      var nx = ((best.left + best.width / 2) / innerWidth) * 2 - 1;
+      var ny = 1 - ((best.top + best.height / 2) / innerHeight) * 2;
+      var tx = -f.ox + nx * halfW, ty = -f.oy + ny * halfH;
+      var len = Math.hypot(tx, ty, AIM_Z) || 1;
+      var dx = tx / len, dy = ty / len, dz = AIM_Z / len;
+      return { yaw: Math.atan2(dx, dz), pitch: -Math.asin(Math.max(-1, Math.min(1, dy))) };
+    }
+
+    var f0 = frameAt(0);
+    var cur = { dist: f0.dist, ox: f0.ox, oy: f0.oy, yaw: 0.5, pitch: -0.2 };
+    var dragYaw = 0, dragPitch = 0;
     var dragging = false, lx = 0, ly = 0;
     function down(e) { dragging = true; cv.classList.add("grabbing"); lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
     function move(e) {
@@ -469,7 +560,9 @@
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      var want = track(scrollProgress());
+      var wf = frameAt(scrollProgress());
+      var wa = aimAt(wf);
+      var want = { dist: wf.dist, ox: wf.ox, oy: wf.oy, yaw: wa.yaw, pitch: wa.pitch };
       // Ease toward the track rather than snapping, so a fast scroll reads as a
       // camera catching up instead of a jump cut. Drag decays back into it.
       var k = MOTION ? 0.075 : 1;
@@ -480,7 +573,7 @@
       cur.oy += (want.oy - cur.oy) * k;
       if (!dragging) { dragYaw *= 0.965; dragPitch *= 0.965; }
 
-      var yaw = cur.yaw + dragYaw + (MOTION ? t * 0.00006 : 0);
+      var yaw = cur.yaw + dragYaw;
       var pitch = Math.max(-0.9, Math.min(0.9, cur.pitch + dragPitch));
       var m = mul(rotX(pitch), rotY(yaw));
       var view = trans(cur.ox, cur.oy, -cur.dist);
@@ -492,6 +585,7 @@
          percent becomes a distraction rather than a detail. */
       gl.uniform1f(uFlick, 0.97 + 0.03 * Math.sin(t * 0.011) * Math.sin(t * 0.037));
       gl.uniform1f(uLamps, HAS_LAMPS);
+      gl.uniform1f(uTex, HAS_TEX);
       gl.drawArrays(gl.TRIANGLES, 0, COUNT);
     }
 

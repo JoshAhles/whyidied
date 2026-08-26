@@ -120,7 +120,7 @@ const xfN = (m, v) => {   // normals ignore translation; uniform scale assumed
   return [o[0] / l, o[1] / l, o[2] / l];
 };
 
-const P = [], N = [];
+const P = [], N = [], UV = [];
 const scene = json.scenes[json.scene || 0];
 function walk(nodeIdx, parent) {
   const node = json.nodes[nodeIdx];
@@ -133,6 +133,7 @@ function walk(nodeIdx, parent) {
         if (prim.mode !== undefined && prim.mode !== 4) continue;
         const pos = read(prim.attributes.POSITION);
         const nrm = prim.attributes.NORMAL !== undefined ? read(prim.attributes.NORMAL) : null;
+        const uv = prim.attributes.TEXCOORD_0 !== undefined ? read(prim.attributes.TEXCOORD_0) : null;
         const idx = prim.indices !== undefined ? read(prim.indices) : null;
         const n = idx ? idx.length : pos.length / 3;
         // Whole triangles only: cutting per-vertex would leave torn faces.
@@ -143,6 +144,7 @@ function walk(nodeIdx, parent) {
             tri.push({
               p: xf(world, [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]]),
               n: nrm ? xfN(world, [nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]]) : [0, 1, 0],
+              t: uv ? [uv[v * 2], uv[v * 2 + 1]] : [0, 0],
             });
           }
           // KEEP only triangles wholly above the cut. Dropping just the ones
@@ -150,7 +152,11 @@ function walk(nodeIdx, parent) {
           // from the camera down to the base plate renders as a long needle —
           // which is exactly what appeared on the page.
           if (!tri.every((t) => t.p[1] >= ABOVE)) continue;
-          for (const t of tri) { P.push(t.p[0], t.p[1], t.p[2]); N.push(t.n[0], t.n[1], t.n[2]); }
+          for (const t of tri) {
+            P.push(t.p[0], t.p[1], t.p[2]);
+            N.push(t.n[0], t.n[1], t.n[2]);
+            UV.push(t.t[0], t.t[1]);
+          }
         }
       }
     }
@@ -172,8 +178,35 @@ for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) {
   if (pos[i + k] > max[k]) max[k] = pos[i + k];
 }
 
+/* ---- textures, embedded ---------------------------------------------
+ * STRIPPING THEM WAS A MISTAKE. A bare mesh lit by a shader tuned for a
+ * machined box looks exactly like what it is, and Josh said so immediately.
+ * The maps are what make this read as an object rather than a grey blob, and at
+ * ~1 MB for all three they are affordable on a page that has already dropped
+ * 150 KB of libraries.
+ *
+ * Order is fixed — baseColor, ARM, normal — so the page does not have to walk
+ * the material graph to find out which is which.
+ */
+const texArg = flags.find((f) => f.startsWith("--textures="));
+const texDir = texArg ? texArg.split("=")[1] : null;
+const texFiles = [];
+if (texDir) {
+  const { readdirSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const all = readdirSync(texDir);
+  for (const want of ["diff", "arm", "nor"]) {
+    const f = all.find((x) => x.includes(want) && /\.(jpe?g|png)$/i.test(x));
+    if (!f) throw new Error("missing a " + want + " map in " + texDir);
+    texFiles.push({ name: f, data: readFileSync(join(texDir, f)),
+                    mime: /\.png$/i.test(f) ? "image/png" : "image/jpeg" });
+  }
+}
+
+const uvArr = new Float32Array(UV);
 const pad4 = (n) => (4 - (n % 4)) % 4;
-const parts = [Buffer.from(pos.buffer), Buffer.from(nrm.buffer), Buffer.from(col.buffer)];
+const parts = [Buffer.from(pos.buffer), Buffer.from(nrm.buffer), Buffer.from(col.buffer), Buffer.from(uvArr.buffer)];
+for (const t of texFiles) parts.push(t.data, Buffer.alloc(pad4(t.data.length), 0));
 const offs = []; let cur = 0;
 for (const p of parts) { offs.push(cur); cur += p.length; }
 const binOut = Buffer.concat(parts, cur);
@@ -183,15 +216,39 @@ const gltf = {
   asset: { version: "2.0", generator: "whyidied prep-camera.mjs",
            copyright: "AntiqueCamera geometry by Maximilian Kamps / UX3D, CC0 1.0. Textures and materials removed." },
   scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: "hero" }],
-  meshes: [{ name: "hero", primitives: [{ attributes: { POSITION: 0, NORMAL: 1, COLOR_0: 2 }, mode: 4 }] }],
+  meshes: [{ name: "hero", primitives: [{
+    attributes: Object.assign({ POSITION: 0, NORMAL: 1, COLOR_0: 2 }, texFiles.length ? { TEXCOORD_0: 3 } : {}),
+    mode: 4, material: texFiles.length ? 0 : undefined,
+  }] }],
   buffers: [{ byteLength: binOut.length }],
-  bufferViews: parts.map((p, i) => ({ buffer: 0, byteOffset: offs[i], byteLength: p.length, target: 34962 })),
+  bufferViews: [],
   accessors: [
     { bufferView: 0, componentType: 5126, count, type: "VEC3", min, max },
     { bufferView: 1, componentType: 5126, count, type: "VEC3" },
     { bufferView: 2, componentType: 5126, count, type: "VEC4" },
   ],
 };
+// Attribute views first, then one view per embedded image.
+for (let i = 0; i < 4; i++) {
+  gltf.bufferViews.push({ buffer: 0, byteOffset: offs[i], byteLength: parts[i].length, target: 34962 });
+}
+if (texFiles.length) {
+  gltf.accessors.push({ bufferView: 3, componentType: 5126, count, type: "VEC2" });
+  gltf.images = []; gltf.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }];
+  gltf.textures = []; 
+  texFiles.forEach((t, i) => {
+    const vi = gltf.bufferViews.length;
+    gltf.bufferViews.push({ buffer: 0, byteOffset: offs[4 + i * 2], byteLength: t.data.length });
+    gltf.images.push({ bufferView: vi, mimeType: t.mime, name: t.name });
+    gltf.textures.push({ sampler: 0, source: i });
+  });
+  gltf.materials = [{
+    name: "hero",
+    pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicRoughnessTexture: { index: 1 } },
+    normalTexture: { index: 2 },
+    extras: { maps: ["baseColor", "arm", "normal"] },
+  }];
+}
 
 const jb = Buffer.from(JSON.stringify(gltf), "utf8");
 const jc = Buffer.concat([jb, Buffer.alloc(pad4(jb.length), 0x20)]);
