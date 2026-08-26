@@ -212,7 +212,7 @@
       "precision highp float;" +
       "varying vec3 vN; varying vec3 vP; varying vec2 vA; varying vec2 vUV;" +
       "uniform vec3 uCam; uniform float uFlick; uniform float uLamps;" +
-      "uniform sampler2D uDiff; uniform sampler2D uARM; uniform float uTex;" +
+      "uniform sampler2D uDiff; uniform sampler2D uARM; uniform float uTex; uniform float uDim;" +
       "float h(vec2 p){ return fract(sin(dot(p,vec2(41.7,289.1)))*43758.5453); }" +
       "float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);" +
       " return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }" +
@@ -247,7 +247,7 @@
       " if(vA.x > 0.02){ float lit = vA.x*uFlick;" +
       "   col = mix(col, vec3(1.0,0.78,0.30), 0.86*lit) + vec3(0.55,0.32,0.05)*lit; }" +
       " col += vec3(0.78,0.82,0.90)*spec*mix(0.10, 0.85, 1.0-rough);" +" col += vec3(1.0,0.68,0.20)*rim*mix(0.34, 0.60, uTex);" +" col *= mix(0.30, 0.60, uTex);" +" col = col/(col+0.86); col = pow(col, vec3(0.4545));" +
-      " gl_FragColor = vec4(col, 1.0); }";
+      " gl_FragColor = vec4(col * (1.0 - uDim*0.82), 1.0 - uDim*0.55); }";
 
     function sh(t, src) {
       var s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
@@ -439,9 +439,12 @@
         uCam = gl.getUniformLocation(pr, "uCam"),
         uFlick = gl.getUniformLocation(pr, "uFlick"),
         uLamps = gl.getUniformLocation(pr, "uLamps"),
-        uTex = gl.getUniformLocation(pr, "uTex");
+        uTex = gl.getUniformLocation(pr, "uTex"),
+        uDim = gl.getUniformLocation(pr, "uDim");
 
     gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     // NOT culling: the winding rule for chamfer corners was wrong in half the
     // octants, which drew stray triangles off the silhouette. The body is a
     // closed solid, so depth alone is correct here and costs nothing at this
@@ -482,14 +485,19 @@
      *
      * Only the framing stays on a track: how far away it sits and which side of
      * the page it occupies. */
-    var FRAME = [
-      { at: 0.00, dist: 4.70, ox: -1.15, oy: 0.05 },
-      { at: 0.20, dist: 4.10, ox:  1.02, oy: 0.00 },
-      { at: 0.42, dist: 5.20, ox: -0.92, oy: 0.08 },
-      { at: 0.62, dist: 4.30, ox:  1.10, oy: 0.00 },
-      { at: 0.82, dist: 5.60, ox: -0.60, oy: 0.10 },
-      { at: 1.00, dist: 4.80, ox:  0.90, oy: 0.00 },
-    ];
+    /* THE SECTIONS DECIDE WHERE IT SITS, not a scroll percentage. Driving the
+     * framing off a fraction of total scroll height is why it drifted out of
+     * step with the page and ended up parked on top of the FAQ: that fraction
+     * has no relationship to where a section actually is, and it shifts with
+     * window height and with any content edit.
+     *
+     * Each section carries `data-stage="ox,oy,dist,dim"`. Full-width sections
+     * push it far out and dim it, because there is no free side of the page for
+     * it to occupy — a hero object competing with body copy loses, and should. */
+    var STAGE = [].slice.call(document.querySelectorAll("[data-stage]")).map(function (el) {
+      var v = el.getAttribute("data-stage").split(",").map(Number);
+      return { el: el, ox: v[0], oy: v[1], dist: v[2], dim: v[3] || 0 };
+    });
     var FOCUS = [].slice.call(document.querySelectorAll("[data-focus]"));
     /** The lens runs down the model's long axis. Established by measuring the
      *  mesh rather than guessing: the barrel is the Z extent. */
@@ -499,13 +507,29 @@
      *  anything beside it. */
     var AIM_Z = 1.35;
     var ease = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
-    function frameAt(p) {
-      var i = 0;
-      while (i < FRAME.length - 2 && p > FRAME[i + 1].at) i++;
-      var a = FRAME[i], b = FRAME[i + 1];
-      var t = ease(Math.max(0, Math.min(1, (p - a.at) / (b.at - a.at || 1))));
-      return { dist: a.dist + (b.dist - a.dist) * t,
-               ox: a.ox + (b.ox - a.ox) * t, oy: a.oy + (b.oy - a.oy) * t };
+    function frameAt() {
+      if (!STAGE.length) return { dist: 5, ox: 0, oy: 0, dim: 0 };
+      var mid = innerHeight / 2, i;
+      // Centres in document space, so the blend follows the sections themselves.
+      var c = STAGE.map(function (s) {
+        var r = s.el.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
+      if (c[0] >= mid) return STAGE[0];
+      for (i = 0; i < STAGE.length - 1; i++) {
+        if (c[i] <= mid && c[i + 1] >= mid) {
+          var span = c[i + 1] - c[i] || 1;
+          var t = ease(Math.max(0, Math.min(1, (mid - c[i]) / span)));
+          var a = STAGE[i], b = STAGE[i + 1];
+          return {
+            dist: a.dist + (b.dist - a.dist) * t,
+            ox: a.ox + (b.ox - a.ox) * t,
+            oy: a.oy + (b.oy - a.oy) * t,
+            dim: a.dim + (b.dim - a.dim) * t,
+          };
+        }
+      }
+      return STAGE[STAGE.length - 1];
     }
 
     /** Where the lens should point, in the object's own space. */
@@ -530,8 +554,8 @@
       return { yaw: Math.atan2(dx, dz), pitch: -Math.asin(Math.max(-1, Math.min(1, dy))) };
     }
 
-    var f0 = frameAt(0);
-    var cur = { dist: f0.dist, ox: f0.ox, oy: f0.oy, yaw: 0.5, pitch: -0.2 };
+    var f0 = STAGE[0] || { dist: 5, ox: 0, oy: 0, dim: 0 };
+    var cur = { dist: f0.dist, ox: f0.ox, oy: f0.oy, dim: f0.dim, yaw: 0.5, pitch: -0.2 };
     var dragYaw = 0, dragPitch = 0;
     var dragging = false, lx = 0, ly = 0;
     function down(e) { dragging = true; cv.classList.add("grabbing"); lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
@@ -560,9 +584,9 @@
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      var wf = frameAt(scrollProgress());
+      var wf = frameAt();
       var wa = aimAt(wf);
-      var want = { dist: wf.dist, ox: wf.ox, oy: wf.oy, yaw: wa.yaw, pitch: wa.pitch };
+      var want = { dist: wf.dist, ox: wf.ox, oy: wf.oy, dim: wf.dim, yaw: wa.yaw, pitch: wa.pitch };
       // Ease toward the track rather than snapping, so a fast scroll reads as a
       // camera catching up instead of a jump cut. Drag decays back into it.
       var k = MOTION ? 0.075 : 1;
@@ -571,6 +595,7 @@
       cur.dist += (want.dist - cur.dist) * k;
       cur.ox += (want.ox - cur.ox) * k;
       cur.oy += (want.oy - cur.oy) * k;
+      cur.dim += (want.dim - cur.dim) * k;
       if (!dragging) { dragYaw *= 0.965; dragPitch *= 0.965; }
 
       var yaw = cur.yaw + dragYaw;
@@ -586,6 +611,7 @@
       gl.uniform1f(uFlick, 0.97 + 0.03 * Math.sin(t * 0.011) * Math.sin(t * 0.037));
       gl.uniform1f(uLamps, HAS_LAMPS);
       gl.uniform1f(uTex, HAS_TEX);
+      gl.uniform1f(uDim, cur.dim);
       gl.drawArrays(gl.TRIANGLES, 0, COUNT);
     }
 
