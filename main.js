@@ -88,7 +88,7 @@
      THE RECORDER — procedural geometry + computed metal
      ═══════════════════════════════════════════════════════════════════ */
   (function recorder() {
-    var cv = document.getElementById("rec");
+    var cv = document.getElementById("stage");
     if (!cv) return;
     var gl = cv.getContext("webgl", { antialias: true, alpha: true, premultipliedAlpha: false });
     if (!gl) { cv.style.display = "none"; return; }
@@ -222,13 +222,13 @@
          flat-shaded faces look like painted cardboard. */
       " vec3 sky = vec3(0.235,0.285,0.355); vec3 flr = vec3(0.012,0.011,0.010);" +
       " vec3 env = mix(flr, sky, smoothstep(-0.42,0.55,R.y));" +
-      " float amb = 0.13 + 0.52*max(dot(N, normalize(vec3(-0.46,0.78,0.60))),0.0);" +
+      " float amb = 0.11 + 0.62*max(dot(N, normalize(vec3(-0.34,0.62,0.85))),0.0);" +
       /* Anisotropic brushed grain: noise stretched along the surface, projected
          on whichever axis the face points down, so streaks run ALONG a panel
          rather than swimming across it. */
       " vec3 an = abs(N); vec2 uv = an.z>an.x&&an.z>an.y ? vP.xy : (an.x>an.y ? vP.zy : vP.xz);" +
       " float grain = n2(vec2(uv.x*90.0, uv.y*3.5))*0.6 + n2(vec2(uv.x*260.0, uv.y*6.0))*0.4;" +
-      " float metal = 0.072 + 0.030*grain;" +
+      " float metal = 0.060 + 0.026*grain;" +
       /* Panel seams: single-axis grooves with a worn upper lip. Two axes read as
          a waffle; one reads as machining. */
       " float seam = 0.0;" +
@@ -236,12 +236,12 @@
       " metal *= (1.0 - 0.55*seam);" +
       /* Grime pools on upward faces. */
       " metal *= 1.0 - 0.16*smoothstep(0.25,1.0,N.y)*n2(uv*9.0);" +
-      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.46,0.78,0.60));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), 46.0);" +" float rim = pow(1.0 - max(dot(N,V),0.0), 4.2) * max(dot(N, normalize(vec3(-0.75,0.35,-0.55))),0.0);" +
-      " vec3 col = vec3(metal)*amb + env*(0.34 + 0.62*fres);" +
+      " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.34,0.62,0.85));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), 46.0);" +" float rim = pow(1.0 - max(dot(N,V),0.0), 4.2) * max(dot(N, normalize(vec3(-0.75,0.35,-0.55))),0.0);" +
+      " vec3 col = vec3(metal)*amb + env*(0.26 + 0.70*fres);" +
       /* Light spill: the lamps throw amber onto the shell around them, which is
          what makes an emissive read as a light source rather than a sticker. */
       " float d = distance(vP, vec3(-0.40,0.30,0.49));" +
-      " col += vec3(1.0,0.70,0.16) * 0.85 * exp(-d*4.0) * uFlick * uLamps;" +
+      " col += vec3(1.0,0.70,0.16) * 1.25 * exp(-d*3.4) * uFlick * uLamps;" +
       /* The lamp lenses themselves: hot core, bright bezel ring. */
       " if(vA.x > 0.02){ float lit = vA.x*uFlick;" +
       "   col = mix(col, vec3(1.0,0.78,0.30), 0.86*lit) + vec3(0.55,0.32,0.05)*lit; }" +
@@ -331,6 +331,8 @@
 
       var pos = read(prim.attributes.POSITION);
       var nrm = prim.attributes.NORMAL !== undefined ? read(prim.attributes.NORMAL) : null;
+      var lamp = prim.attributes.COLOR_0 !== undefined ? read(prim.attributes.COLOR_0) : null;
+      var lampStride = lamp && json.accessors[prim.attributes.COLOR_0].type === "VEC3" ? 3 : 4;
       var idx = prim.indices !== undefined ? read(prim.indices) : null;
       var n = idx ? idx.length : pos.length / 3;
 
@@ -340,6 +342,7 @@
         v = idx ? idx[i] : i;
         OP[i * 3] = pos[v * 3]; OP[i * 3 + 1] = pos[v * 3 + 1]; OP[i * 3 + 2] = pos[v * 3 + 2];
         if (nrm) { ON[i * 3] = nrm[v * 3]; ON[i * 3 + 1] = nrm[v * 3 + 1]; ON[i * 3 + 2] = nrm[v * 3 + 2]; }
+        if (lamp) OA[i * 2] = lamp[v * lampStride];
       }
       if (!nrm) {                       // flat normals from the triangles themselves
         for (i = 0; i < n; i += 3) {
@@ -358,10 +361,10 @@
         if (OP[i+k] > hi[k]) hi[k] = OP[i+k];
       }
       var span = Math.max(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]) || 1;
-      var sc = 1.52 / span;
+      var sc = 1.40 / span;
       for (i = 0; i < OP.length; i += 3) for (k = 0; k < 3; k++)
         OP[i+k] = (OP[i+k] - (lo[k]+hi[k])/2) * sc;
-      return { P: OP, N: ON, A: OA };
+      return { P: OP, N: ON, A: OA, hasLamps: !!lamp };
     }
 
     /* The procedural object holds the hero until a model is proven to load. A
@@ -375,7 +378,7 @@
       .then(function (r) { if (!r.ok) throw new Error("no hero.glb (" + r.status + ")"); return r.arrayBuffer(); })
       .then(function (ab) {
         var g = parseGLB(ab);
-        upload(g, false);
+        upload(g, g.hasLamps);
         console.log("hero: hero.glb loaded,", g.P.length / 9, "triangles");
       })
       .catch(function (e) { console.log("hero: procedural (" + e.message + ")"); });
@@ -409,20 +412,50 @@
     function rotX(a){var c=Math.cos(a),s=Math.sin(a);return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);}
     function trans(x,y,z){return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]);}
 
-    /* ---- interaction ----------------------------------------------- */
-    var yaw = -0.86, pitch = -0.34, vYaw = 0, dragging = false, lx = 0, ly = 0;
-    function down(e) { dragging = true; lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
+    /* ---- the camera move ---------------------------------------------
+     * The object is not a widget that spins in a box. The page scroll IS the
+     * camera track: each section gets a keyframe and the camera eases between
+     * them, so the recorder is examined from a different side as the argument
+     * moves on. Drag adds an offset on top and decays back to the track, so
+     * grabbing it never fights the scroll or strands it facing backwards.
+     *
+     * `ox` shifts the object sideways in view space, which is what lets it swap
+     * sides of the page between sections without moving any DOM. */
+    var KEYS = [
+      { at: 0.00, yaw: 0.62, pitch: -0.26, dist: 4.70, ox: -1.15, oy: 0.05 },
+      { at: 0.17, yaw: 1.50, pitch: -0.06, dist: 3.90, ox:  1.02, oy: 0.00 },
+      { at: 0.37, yaw: 2.55, pitch: -0.48, dist: 5.40, ox: -0.88, oy: 0.10 },
+      { at: 0.56, yaw: 3.45, pitch:  0.16, dist: 4.20, ox:  1.14, oy: 0.00 },
+      { at: 0.76, yaw: 4.30, pitch: -0.30, dist: 6.20, ox:  0.00, oy: 0.14 },
+      { at: 1.00, yaw: 5.10, pitch: -0.18, dist: 4.90, ox: -0.80, oy: 0.00 },
+    ];
+    var ease = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+    function track(p) {
+      var i = 0;
+      while (i < KEYS.length - 2 && p > KEYS[i + 1].at) i++;
+      var a = KEYS[i], b = KEYS[i + 1];
+      var t = ease(Math.max(0, Math.min(1, (p - a.at) / (b.at - a.at || 1))));
+      return {
+        yaw: a.yaw + (b.yaw - a.yaw) * t, pitch: a.pitch + (b.pitch - a.pitch) * t,
+        dist: a.dist + (b.dist - a.dist) * t,
+        ox: a.ox + (b.ox - a.ox) * t, oy: a.oy + (b.oy - a.oy) * t,
+      };
+    }
+    var cur = track(0), dragYaw = 0, dragPitch = 0;
+    var dragging = false, lx = 0, ly = 0;
+    function down(e) { dragging = true; cv.classList.add("grabbing"); lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
     function move(e) {
       if (!dragging) return;
       var p = e.touches ? e.touches[0] : e;
-      yaw += (p.clientX - lx) * 0.008;
-      pitch += (p.clientY - ly) * 0.006;
-      pitch = Math.max(-0.85, Math.min(0.85, pitch));
+      dragYaw += (p.clientX - lx) * 0.009;
+      dragPitch += (p.clientY - ly) * 0.006;
+      dragPitch = Math.max(-0.7, Math.min(0.7, dragPitch));
       lx = p.clientX; ly = p.clientY;
       if (e.touches) e.preventDefault();
       if (!MOTION) draw(0);
     }
-    function up() { dragging = false; }
+    function up() { dragging = false; cv.classList.remove("grabbing"); }
+    cv.style.pointerEvents = "auto";
     cv.addEventListener("mousedown", down);
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -430,19 +463,31 @@
     cv.addEventListener("touchmove", move, { passive: false });
     window.addEventListener("touchend", up);
 
-    var camZ = 2.72;
     function draw(t) {
       fit(cv);
       gl.viewport(0, 0, cv.width, cv.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+      var want = track(scrollProgress());
+      // Ease toward the track rather than snapping, so a fast scroll reads as a
+      // camera catching up instead of a jump cut. Drag decays back into it.
+      var k = MOTION ? 0.075 : 1;
+      cur.yaw += (want.yaw - cur.yaw) * k;
+      cur.pitch += (want.pitch - cur.pitch) * k;
+      cur.dist += (want.dist - cur.dist) * k;
+      cur.ox += (want.ox - cur.ox) * k;
+      cur.oy += (want.oy - cur.oy) * k;
+      if (!dragging) { dragYaw *= 0.965; dragPitch *= 0.965; }
+
+      var yaw = cur.yaw + dragYaw + (MOTION ? t * 0.00006 : 0);
+      var pitch = Math.max(-0.9, Math.min(0.9, cur.pitch + dragPitch));
       var m = mul(rotX(pitch), rotY(yaw));
-      var view = trans(0, 0.02, -camZ);
+      var view = trans(cur.ox, cur.oy, -cur.dist);
       var proj = persp(0.72, cv.width / cv.height, 0.1, 40);
       gl.uniformMatrix4fv(uM, false, m);
       gl.uniformMatrix4fv(uMVP, false, mul(proj, mul(view, m)));
-      gl.uniform3f(uCam, 0, -0.02, camZ);
+      gl.uniform3f(uCam, -cur.ox, -cur.oy, cur.dist);
       /* A powered lamp is never perfectly steady, and anything larger than a few
          percent becomes a distraction rather than a detail. */
       gl.uniform1f(uFlick, 0.97 + 0.03 * Math.sin(t * 0.011) * Math.sin(t * 0.037));
@@ -451,16 +496,13 @@
     }
 
     if (!MOTION) { draw(0); window.addEventListener("resize", function(){ draw(0); }); return; }
-    var visible = true;
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(function (en) { visible = en[0].isIntersecting; })
-        .observe(cv);
+    var visible = true;   // the stage is fixed, so it is on screen throughout
+    function scrollProgress() {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      return h > 0 ? Math.max(0, Math.min(1, window.scrollY / h)) : 0;
     }
     (function loop(t) {
-      if (visible) {
-        if (!dragging) { vYaw += (0.0016 - vYaw) * 0.02; yaw += vYaw; }
-        draw(t);
-      }
+      if (visible) draw(t);
       requestAnimationFrame(loop);
     })(0);
   })();
@@ -630,5 +672,112 @@
       new IntersectionObserver(function (e) { vis = e[0].isIntersecting; }).observe(cv);
     }
     (function loop() { if (vis) { t++; draw(); } requestAnimationFrame(loop); })();
+  })();
+  /* ═══════════════════════════════════════════════════════════════════
+     KINETIC TYPE
+     ═══════════════════════════════════════════════════════════════════ */
+  (function kinetic() {
+    var h = document.querySelector("h1.kin");
+    if (!h) return;
+    var words = h.querySelectorAll("span");
+    if (!MOTION || !h.animate) {
+      for (var i = 0; i < words.length; i++) words[i].style.opacity = 1;
+      return;
+    }
+    // WAAPI rather than a library: the stagger is six lines and it runs on the
+    // compositor. Rotate a little on X so the words arrive with some weight
+    // instead of sliding.
+    for (var j = 0; j < words.length; j++) {
+      words[j].animate(
+        [{ opacity: 0, transform: "translateY(.5em) rotateX(-40deg)" },
+         { opacity: 1, transform: "none" }],
+        { duration: 720, delay: 90 + j * 68, easing: "cubic-bezier(.2,.75,.25,1)", fill: "both" });
+    }
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     CURSOR LIGHT — the amber pool follows the pointer
+     ═══════════════════════════════════════════════════════════════════ */
+  (function cursor() {
+    var el = document.getElementById("cursorlight");
+    if (!el || !MOTION || matchMedia("(pointer: coarse)").matches) { if (el) el.remove(); return; }
+    var tx = innerWidth / 2, ty = innerHeight / 3, x = tx, y = ty, raf = 0;
+    addEventListener("pointermove", function (e) {
+      tx = e.clientX; ty = e.clientY;
+      if (!raf) raf = requestAnimationFrame(step);
+    }, { passive: true });
+    function step() {
+      x += (tx - x) * 0.12; y += (ty - y) * 0.12;
+      el.style.transform = "translate3d(" + x.toFixed(1) + "px," + y.toFixed(1) + "px,0)";
+      raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.5 ? requestAnimationFrame(step) : 0;
+    }
+    step();
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     DUST — the room. Depth, so nothing floats on flat black.
+     Encodes NO data, deliberately: atmosphere driven by a player's own numbers
+     would imply a reading nobody asked for and nobody could verify.
+     ═══════════════════════════════════════════════════════════════════ */
+  (function dust() {
+    var cv = document.getElementById("dust");
+    if (!cv) return;
+    if (!MOTION) { cv.remove(); return; }
+    var c = cv.getContext("2d");
+    var motes = [], N = Math.min(150, Math.round(innerWidth / 11));
+    for (var i = 0; i < N; i++) {
+      motes.push({ x: Math.random(), y: Math.random(), z: 0.25 + Math.random() * 0.75,
+                   vx: (Math.random() - 0.5) * 0.00016, vy: -0.00006 - Math.random() * 0.00012 });
+    }
+    var sy = 0;
+    addEventListener("scroll", function () { sy = window.scrollY; }, { passive: true });
+    (function loop() {
+      fit(cv);
+      var w = cv.width, h = cv.height, dpr = w / cv.getBoundingClientRect().width;
+      c.clearRect(0, 0, w, h);
+      for (var i = 0; i < motes.length; i++) {
+        var m = motes[i];
+        m.x += m.vx; m.y += m.vy;
+        if (m.y < -0.05) { m.y = 1.05; m.x = Math.random(); }
+        if (m.x < -0.05) m.x = 1.05; else if (m.x > 1.05) m.x = -0.05;
+        // Parallax: nearer motes travel further against the scroll.
+        var py = (m.y * h + sy * dpr * 0.06 * m.z) % (h + 40) ;
+        var r = (0.5 + m.z * 1.6) * dpr;
+        c.globalAlpha = 0.05 + m.z * 0.16;
+        c.fillStyle = m.z > 0.72 ? "#FFB627" : "#8C9099";
+        c.beginPath(); c.arc(m.x * w, py, r, 0, 7); c.fill();
+      }
+      c.globalAlpha = 1;
+      requestAnimationFrame(loop);
+    })();
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     HORIZONTAL CASE LOG — cards travel sideways as the page scrolls down
+     ═══════════════════════════════════════════════════════════════════ */
+  (function hlog() {
+    var box = document.getElementById("hlog");
+    if (!box) return;
+    var track = box.querySelector(".htrack");
+    if (!track) return;
+    if (!MOTION) { box.style.overflowX = "auto"; return; }
+    var x = 0, tx = 0;
+    function measure() {
+      var over = track.scrollWidth - box.clientWidth;
+      if (over <= 0) { tx = 0; return; }
+      var r = box.getBoundingClientRect();
+      // Progress of the section through the viewport, 0 as it enters, 1 as it
+      // leaves — so the travel is tied to scroll rather than to a timer.
+      var p = 1 - (r.top + r.height) / (innerHeight + r.height);
+      tx = -Math.max(0, Math.min(1, p)) * over;
+    }
+    addEventListener("scroll", measure, { passive: true });
+    addEventListener("resize", measure);
+    measure();
+    (function loop() {
+      x += (tx - x) * 0.09;
+      track.style.transform = "translate3d(" + x.toFixed(1) + "px,0,0)";
+      requestAnimationFrame(loop);
+    })();
   })();
 })();

@@ -101,6 +101,18 @@ body::after{
   box-shadow:inset 0 0 clamp(80px,14vw,220px) rgba(0,0,0,.85);
 }
 main,header,footer{position:relative; z-index:1}
+/* The stage sits behind the page, so any section carrying long-form text puts a
+   scrim between the two. Readability outranks the effect, always. */
+section#how,section#refusal,section#pricing,section#faq{
+  background:linear-gradient(180deg, transparent, rgba(10,13,17,.62) 14%, rgba(10,13,17,.66) 86%, transparent);
+}
+/* Long-form paragraphs get their own local scrim rather than blacking out the
+   whole band — the object travelling behind the page is the point, and a scrim
+   heavy enough to guarantee contrast everywhere hides it. */
+.sub,.trendnote,details p,.lede{
+  text-shadow:0 1px 14px rgba(10,13,17,.95), 0 0 34px rgba(10,13,17,.85);
+}
+h1,h2,h3{text-shadow:0 2px 20px rgba(10,13,17,.75)}
 .wrap{max-width:1180px; margin:0 auto; padding:0 var(--gut)}
 
 /* ── Registers ──────────────────────────────────────────────────────────
@@ -156,15 +168,28 @@ nav a:hover{color:var(--ink)}
 .hero-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:clamp(24px,4vw,56px); align-items:center}
 @media(max-width:900px){.hero-grid{grid-template-columns:1fr; gap:28px}}
 
-.recbox{position:relative; aspect-ratio:1/.82; min-height:280px}
-#rec{display:block; width:100%; height:100%; cursor:grab}
-#rec:active{cursor:grabbing}
-.recbox .hint{
-  position:absolute; bottom:9px; left:0; right:0; text-align:center;
-  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.18em;
-  font-size:10px; color:var(--dim); opacity:.75; pointer-events:none;
+/* ── the pinned stage ───────────────────────────────────────────────── */
+#stage,#dust{
+  position:fixed; inset:0; width:100%; height:100%;
+  z-index:0; pointer-events:none;
 }
-.recbox .lbl{position:absolute; top:9px; left:11px}
+#stage{cursor:grab}
+#stage.grabbing{cursor:grabbing}
+#cursorlight{
+  position:fixed; z-index:0; pointer-events:none; width:44vmax; height:44vmax;
+  left:0; top:0; margin:-22vmax 0 0 -22vmax; opacity:0; transition:opacity .5s ease;
+  background:radial-gradient(circle, rgba(255,182,39,.10), transparent 62%);
+}
+.gs #cursorlight{opacity:1}
+/* The stage is behind everything, so the hero reserves the space the object
+   flies through and the type never lands on top of it. */
+.stagehole{position:relative; aspect-ratio:1/.86; min-height:300px}
+.stagehole .lbl{position:absolute; top:2px; left:2px}
+.stagehole .hint{
+  position:absolute; bottom:4px; left:0; right:0; text-align:center;
+  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.18em;
+  font-size:10px; color:var(--dim); opacity:.6;
+}
 
 h1{
   font-family:var(--f-display); font-weight:700;
@@ -310,12 +335,40 @@ footer a{color:var(--dim)}
 footer a:hover{color:var(--ink)}
 .fl{display:flex; gap:22px; flex-wrap:wrap; margin-bottom:14px}
 
+/* ── kinetic type ───────────────────────────────────────────────────── */
+h1.kin span{display:inline-block}
+.gs h1.kin span{opacity:0; transform:translateY(.5em) rotateX(-40deg)}
+h1.kin .dot{color:var(--amber)}
+
+/* ── horizontal case log ────────────────────────────────────────────── */
+.hscroll{margin-top:34px; overflow:hidden; padding:2px}
+.htrack{display:flex; gap:1px; background:var(--bezel); will-change:transform}
+.card{
+  background:var(--panel); padding:24px 22px; min-width:min(340px,78vw); flex:0 0 auto;
+  background-image:url(brand/panel-grain.png); background-blend-mode:soft-light; background-size:256px;
+  border-top:2px solid var(--fault);
+}
+.card:nth-child(3),.card:nth-child(4){border-top-color:var(--ok)}
+.card:nth-child(5){border-top-color:var(--bezel)}
+.card .c{font-family:var(--f-mono); font-size:11px; color:var(--dim); letter-spacing:.06em}
+.card h3{font-family:var(--f-display); text-transform:uppercase; letter-spacing:.05em; font-size:21px; margin:8px 0 10px; font-weight:600}
+.card .tag{font-family:var(--f-display); text-transform:uppercase; letter-spacing:.11em; font-size:11px; margin-bottom:12px}
+.card .tag.fault{color:var(--fault)} .card .tag.ok{color:var(--ok)} .card .tag.none{color:var(--dim)}
+.card p{color:#B9B6AF; font-size:15px}
+
 /* Entrance: governed, and only where motion is allowed */
 .gs .rise{opacity:0; transform:translateY(14px)}
 .gs .rise.in{opacity:1; transform:none; transition:opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1)}
 </style>
 </head>
 <body>
+
+<!-- The stage is PINNED behind the whole document. The recorder is not a widget
+     in a box on one section — it is a camera move that runs the length of the
+     page, and the sections scroll over it. -->
+<canvas id="stage" aria-hidden="true"></canvas>
+<canvas id="dust" aria-hidden="true"></canvas>
+<div id="cursorlight" aria-hidden="true"></div>
 
 <header>
   <div class="wrap bar">
@@ -335,15 +388,14 @@ footer a:hover{color:var(--ink)}
   <section class="hero">
     <div class="wrap hero-grid">
 
-      <div class="recbox bay">
+      <div class="stagehole" aria-hidden="true">
         <div class="lbl inst dim">Recorder · recovered</div>
-        <canvas id="rec" aria-label="A flight recorder, rendered in three dimensions. Drag to rotate."></canvas>
         <div class="hint">drag to rotate</div>
       </div>
 
       <div>
         <div class="inst">Fortnite · Windows · Zero Build + Build</div>
-        <h1>Every Fortnite death gets an <em>investigation</em>.</h1>
+        <h1 class="kin"><span>Every</span> <span>Fortnite</span> <span>death</span> <span>gets</span> <span>an</span> <em><span>investigation</span></em><span class="dot">.</span></h1>
         <p class="lede">WhyIDied is a <b>Fortnite coach for Windows</b>. It does what a good
           coach does with your VOD — finds the moment that decided the fight and tells you
           what to fix. <b>Except it does it for every death you die</b>, and you never
@@ -488,11 +540,14 @@ footer a:hover{color:var(--ink)}
         — same range band, same weapon class, same phase — that is a habit, and habits
         are the only thing worth coaching.</p>
 
-      <div class="log rise">
-        <div class="r">      <div class="s"></div><div class="c">CASE 0417</div><div class="f">Unprotected peek</div>       <div class="n">7th this week</div></div>
-        <div class="r">      <div class="s"></div><div class="c">CASE 0416</div><div class="f">Late rotation</div>           <div class="n">4th this week</div></div>
-        <div class="r ok">   <div class="s"></div><div class="c">CASE 0411</div><div class="f">Fighting without cover</div>  <div class="n"><b>▼ 43%</b> vs last 50</div></div>
-        <div class="r ok">   <div class="s"></div><div class="c">CASE 0402</div><div class="f">Third-party clock</div>       <div class="n"><b>▼ 21%</b> vs last 50</div></div>
+      <div class="hscroll" id="hlog">
+        <div class="htrack">
+          <article class="card"><div class="c">CASE 0417</div><h3>Unprotected peek</h3><p class="tag fault">7th this week</p><p>Third peek, same angle, no cover behind you. 34 m, storm phase 7.</p></article>
+          <article class="card"><div class="c">CASE 0416</div><h3>Late rotation</h3><p class="tag fault">4th this week</p><p>Left with 41 seconds of storm remaining and crossed open ground.</p></article>
+          <article class="card"><div class="c">CASE 0411</div><h3>Fighting without cover</h3><p class="tag ok">▼ 43% vs your last 50</p><p>You are taking this fight less often than you were. That is the ledger working.</p></article>
+          <article class="card"><div class="c">CASE 0402</div><h3>Third-party clock</h3><p class="tag ok">▼ 21% vs your last 50</p><p>Holding fights shorter near contested ground.</p></article>
+          <article class="card"><div class="c">CASE 0399</div><h3>Materials at zero</h3><p class="tag none">No reading</p><p>Materials panel not visible in frame. Recorded as unknown, not as zero.</p></article>
+        </div>
       </div>
       <p class="trendnote">Progress is measured against <b>your own recent baseline</b>,
         not this week against last — because a week where you played forty games and a
@@ -611,6 +666,6 @@ footer a:hover{color:var(--ink)}
   </div>
 </footer>
 
-<script src="main.js?v=13" defer></script>
+<script src="main.js?v=20" defer></script>
 </body>
 </html>
