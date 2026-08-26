@@ -37,6 +37,20 @@ const noTripod = flags.includes("--no-tripod");
 const aboveArg = flags.find((f) => f.startsWith("--above="));
 const ABOVE = aboveArg ? parseFloat(aboveArg.split("=")[1]) : -Infinity;
 
+/* SPLIT THE HOUSING FROM THE MOUNT so the page can move one without the other.
+ * A security camera twitches on its bracket; the bracket is bolted to a wall and
+ * does not move. Rotating the whole object reads as someone waving it around.
+ *
+ * The source ships one mesh, so the split is geometric — and it is not a guess.
+ * Measuring X width per height slice: below y=0.10 every slice is 0.055-0.083
+ * wide (the wall plate and the arm), above it they widen to 0.13-0.17 (the
+ * barrel). The narrow band at y~0.077 is the knuckle, whose centroid is the
+ * pivot. `--split=` and `--pivot=` keep those numbers out of the code. */
+const splitArg = flags.find((f) => f.startsWith("--split="));
+const SPLIT = splitArg ? parseFloat(splitArg.split("=")[1]) : null;
+const pivotArg = flags.find((f) => f.startsWith("--pivot="));
+const PIVOT = pivotArg ? pivotArg.split("=")[1].split(",").map(Number) : [0, 0, 0];
+
 // Accepts a .glb OR a .gltf with an external .bin, because the two good CC0
 // sources publish in different shapes: Khronos ships binary, Poly Haven ships
 // gltf plus a sidecar buffer.
@@ -120,7 +134,7 @@ const xfN = (m, v) => {   // normals ignore translation; uniform scale assumed
   return [o[0] / l, o[1] / l, o[2] / l];
 };
 
-const P = [], N = [], UV = [];
+const P = [], N = [], UV = [], PART = [];
 const scene = json.scenes[json.scene || 0];
 function walk(nodeIdx, parent) {
   const node = json.nodes[nodeIdx];
@@ -152,10 +166,15 @@ function walk(nodeIdx, parent) {
           // from the camera down to the base plate renders as a long needle —
           // which is exactly what appeared on the page.
           if (!tri.every((t) => t.p[1] >= ABOVE)) continue;
+          // Whole triangles again: a face split between the two parts would tear
+          // open the moment the housing moves.
+          const cy = (tri[0].p[1] + tri[1].p[1] + tri[2].p[1]) / 3;
+          const part = SPLIT !== null && cy >= SPLIT ? 1 : 0;
           for (const t of tri) {
             P.push(t.p[0], t.p[1], t.p[2]);
             N.push(t.n[0], t.n[1], t.n[2]);
             UV.push(t.t[0], t.t[1]);
+            PART.push(part);
           }
         }
       }
@@ -170,7 +189,11 @@ if (!P.length) throw new Error("no geometry survived — check --no-tripod");
 /* ---- write a lean geometry-only GLB ---------------------------------- */
 const pos = new Float32Array(P), nrm = new Float32Array(N);
 const col = new Float32Array((P.length / 3) * 4);
-for (let i = 0; i < col.length; i += 4) { col[i + 3] = 1; }   // lamp mask stays 0
+for (let i = 0, v = 0; i < col.length; i += 4, v++) {
+  col[i] = 0;              // red: lamp mask, none on a sourced model
+  col[i + 1] = PART[v] || 0;   // green: 1 = housing, 0 = mount
+  col[i + 3] = 1;
+}
 
 const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
 for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) {
@@ -246,7 +269,9 @@ if (texFiles.length) {
     name: "hero",
     pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicRoughnessTexture: { index: 1 } },
     normalTexture: { index: 2 },
-    extras: { maps: ["baseColor", "arm", "normal"] },
+    extras: { maps: ["baseColor", "arm", "normal"],
+              parts: "COLOR_0.g: 1 = housing, 0 = mount",
+              pivot: PIVOT },
   }];
 }
 

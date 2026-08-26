@@ -210,12 +210,28 @@
     var PROC = { P: P, N: N, A: A };
 
     /* ---- program --------------------------------------------------- */
+    /* aA.y is the PART ID: 1 for the housing, 0 for the mount. The housing turns
+     * about the knuckle while the bracket stays bolted where it is, which is what
+     * a real camera does — rotating the whole object reads as somebody waving it
+     * around by the bracket. */
     var VS =
       "attribute vec3 aP; attribute vec3 aN; attribute vec2 aA; attribute vec2 aUV;" +
-      "uniform mat4 uMVP; uniform mat4 uM;" +
+      "uniform mat4 uMVP; uniform mat4 uM; uniform vec3 uPivot; uniform vec2 uTwitch;" +
       "varying vec3 vN; varying vec3 vP; varying vec2 vA; varying vec2 vUV;" +
-      "void main(){ vN = mat3(uM)*aN; vP = (uM*vec4(aP,1.0)).xyz; vA = aA; vUV = aUV;" +
-      " gl_Position = uMVP*vec4(aP,1.0); }";
+      "void main(){" +
+      " vec3 p = aP; vec3 nn = aN;" +
+      " if (aA.y > 0.5) {" +
+      "   float cy = cos(uTwitch.x), sy = sin(uTwitch.x);" +
+      "   float cp = cos(uTwitch.y), sp = sin(uTwitch.y);" +
+      "   vec3 q = aP - uPivot;" +
+      "   q = vec3(cy*q.x + sy*q.z, q.y, -sy*q.x + cy*q.z);" +
+      "   q = vec3(q.x, cp*q.y - sp*q.z, sp*q.y + cp*q.z);" +
+      "   p = q + uPivot;" +
+      "   vec3 m = vec3(cy*aN.x + sy*aN.z, aN.y, -sy*aN.x + cy*aN.z);" +
+      "   nn = vec3(m.x, cp*m.y - sp*m.z, sp*m.y + cp*m.z);" +
+      " }" +
+      " vN = mat3(uM)*nn; vP = (uM*vec4(p,1.0)).xyz; vA = aA; vUV = aUV;" +
+      " gl_Position = uMVP*vec4(p,1.0); }";
 
     var FS =
       "precision highp float;" +
@@ -279,7 +295,7 @@
       gl.enableVertexAttribArray(l);
       gl.vertexAttribPointer(l, size, gl.FLOAT, false, 0, 0);
     }
-    var HAS_LAMPS = 1, HAS_TEX = 0;
+    var HAS_LAMPS = 1, HAS_TEX = 0, PIVOT = [0, 0, 0];
     function upload(g, lamps) {
       buf(g.P, "aP", 3); buf(g.N, "aN", 3); buf(g.A, "aA", 2);
       buf(g.UV || new Float32Array((g.P.length / 3) * 2), "aUV", 2);
@@ -386,7 +402,10 @@
         v = idx ? idx[i] : i;
         OP[i * 3] = pos[v * 3]; OP[i * 3 + 1] = pos[v * 3 + 1]; OP[i * 3 + 2] = pos[v * 3 + 2];
         if (nrm) { ON[i * 3] = nrm[v * 3]; ON[i * 3 + 1] = nrm[v * 3 + 1]; ON[i * 3 + 2] = nrm[v * 3 + 2]; }
-        if (lamp) OA[i * 2] = lamp[v * lampStride];
+        if (lamp) {
+          OA[i * 2] = lamp[v * lampStride];
+          OA[i * 2 + 1] = lamp[v * lampStride + 1];   // green channel: part id
+        }
         if (uv) { OU[i * 2] = uv[v * 2]; OU[i * 2 + 1] = uv[v * 2 + 1]; }
       }
       if (!nrm) {                       // flat normals from the triangles themselves
@@ -407,8 +426,15 @@
       }
       var span = Math.max(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]) || 1;
       var sc = 1.62 / span;
+      var mid = [(lo[0]+hi[0])/2, (lo[1]+hi[1])/2, (lo[2]+hi[2])/2];
       for (i = 0; i < OP.length; i += 3) for (k = 0; k < 3; k++)
-        OP[i+k] = (OP[i+k] - (lo[k]+hi[k])/2) * sc;
+        OP[i+k] = (OP[i+k] - mid[k]) * sc;
+      // The pivot is declared in the model's own space, so it must travel through
+      // the same centring and scaling — otherwise the housing swings about a point
+      // somewhere out in the void.
+      var mat0 = (json.materials || [])[0];
+      var pv = (mat0 && mat0.extras && mat0.extras.pivot) || [0, 0, 0];
+      var pivot = [(pv[0]-mid[0])*sc, (pv[1]-mid[1])*sc, (pv[2]-mid[2])*sc];
       // Images live in bufferViews, so they come across in the same fetch. A
       // blob URL is the shortest path from those bytes to something an <img>
       // will decode, and the browser does the JPEG work off the main thread.
@@ -419,7 +445,7 @@
       });
       var lit = false;
       if (lamp) for (var q = 0; q < OA.length; q += 2) if (OA[q] > 0.02) { lit = true; break; }
-      return { P: OP, N: ON, A: OA, UV: OU, hasLamps: lit, images: imgs };
+      return { P: OP, N: ON, A: OA, UV: OU, hasLamps: lit, images: imgs, pivot: pivot };
     }
 
     /* The procedural object holds the hero until a model is proven to load. A
@@ -434,6 +460,7 @@
       .then(function (ab) {
         var g = parseGLB(ab);
         upload(g, g.hasLamps);
+        PIVOT = g.pivot || [0, 0, 0];
         if (g.images && g.images.length >= 2) {
           loadTex(g.images[0], 0, "uDiff");
           loadTex(g.images[1], 1, "uARM");
@@ -449,7 +476,9 @@
         uFlick = gl.getUniformLocation(pr, "uFlick"),
         uLamps = gl.getUniformLocation(pr, "uLamps"),
         uTex = gl.getUniformLocation(pr, "uTex"),
-        uDim = gl.getUniformLocation(pr, "uDim");
+        uDim = gl.getUniformLocation(pr, "uDim"),
+        uPivot = gl.getUniformLocation(pr, "uPivot"),
+        uTwitch = gl.getUniformLocation(pr, "uTwitch");
 
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -479,9 +508,8 @@
     /* ---- the camera move ---------------------------------------------
      * The object is not a widget that spins in a box. The page scroll IS the
      * camera track: each section gets a keyframe and the camera eases between
-     * them, so the recorder is examined from a different side as the argument
-     * moves on. Drag adds an offset on top and decays back to the track, so
-     * grabbing it never fights the scroll or strands it facing backwards.
+     * them, so the camera is examined from a different side as the argument
+     * moves on.
      *
      * `ox` shifts the object sideways in view space, which is what lets it swap
      * sides of the page between sections without moving any DOM. */
@@ -568,37 +596,37 @@
     }
 
     var lastT = 0;
+    /** A surveillance camera does not pan smoothly — it HOLDS, then snaps
+     *  somewhere else. A sine wave reads as a toy; hold-and-snap reads as a
+     *  machine that decided to look. Micro-jitter on top, because a motor under
+     *  load is never perfectly still. */
+    function sweep(ms) {
+      var t = ms / 1000, HOLD = 2.6;
+      var seg = Math.floor(t / HOLD), fr = t / HOLD - seg;
+      var h = function (n) { var x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+      var k = Math.min(1, fr / 0.16); k = k * k * (3 - 2 * k);
+      var y0 = (h(seg) - 0.5) * 0.52, y1 = (h(seg + 1) - 0.5) * 0.52;
+      var p0 = (h(seg + 71) - 0.5) * 0.20, p1 = (h(seg + 72) - 0.5) * 0.20;
+      return [
+        y0 + (y1 - y0) * k + Math.sin(t * 7.3) * 0.0045 + Math.sin(t * 11.9) * 0.003,
+        p0 + (p1 - p0) * k + Math.sin(t * 9.1) * 0.003,
+      ];
+    }
     var f0 = STAGE[0] || { dist: 5, ox: 0, oy: 0, dim: 0 };
     var cur = MOTION
       ? { dist: f0.dist * 1.45, ox: f0.ox * 1.2, oy: f0.oy - 0.22, dim: 0.72, yaw: -0.9, pitch: 0.34 }
       : { dist: f0.dist, ox: f0.ox, oy: f0.oy, dim: f0.dim, yaw: 0.5, pitch: -0.2 };
-    var dragYaw = 0, dragPitch = 0;
-    var dragging = false, lx = 0, ly = 0;
-    function down(e) { dragging = true; cv.classList.add("grabbing"); lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
-    function move(e) {
-      if (!dragging) return;
-      var p = e.touches ? e.touches[0] : e;
-      dragYaw += (p.clientX - lx) * 0.009;
-      dragPitch += (p.clientY - ly) * 0.006;
-      dragPitch = Math.max(-0.7, Math.min(0.7, dragPitch));
-      lx = p.clientX; ly = p.clientY;
-      if (e.touches) e.preventDefault();
-      if (!MOTION) draw(0);
-    }
-    function up() { dragging = false; cv.classList.remove("grabbing"); }
-    cv.style.pointerEvents = "auto";
-    cv.addEventListener("mousedown", down);
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    cv.addEventListener("touchstart", down, { passive: true });
-    cv.addEventListener("touchmove", move, { passive: false });
-    window.addEventListener("touchend", up);
+    /* NO DRAGGING, removed 2026-08-26. It required pointer-events on a canvas
+       covering the entire viewport — a hazard laid over the whole page for a
+       feature nobody asked for. The housing now sweeps on its own and the rig
+       follows the scroll, so a handle earns nothing. */
 
     function draw(t) {
       fit(cv);
       gl.viewport(0, 0, cv.width, cv.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      if (cur.dim > 0.985) return;   // faded out — nothing left to draw
 
       var wf = frameAt();
       var wa = aimAt(wf);
@@ -615,10 +643,9 @@
       cur.ox += (want.ox - cur.ox) * k;
       cur.oy += (want.oy - cur.oy) * k;
       cur.dim += (want.dim - cur.dim) * k;
-      if (!dragging) { var dk = Math.pow(0.965, dt * 60); dragYaw *= dk; dragPitch *= dk; }
 
-      var yaw = cur.yaw + dragYaw;
-      var pitch = Math.max(-0.9, Math.min(0.9, cur.pitch + dragPitch));
+      var yaw = cur.yaw;
+      var pitch = Math.max(-0.9, Math.min(0.9, cur.pitch));
       var m = mul(rotX(pitch), rotY(yaw));
       var view = trans(cur.ox, cur.oy, -cur.dist);
       var proj = persp(0.72, cv.width / cv.height, 0.1, 40);
@@ -631,6 +658,9 @@
       gl.uniform1f(uLamps, HAS_LAMPS);
       gl.uniform1f(uTex, HAS_TEX);
       gl.uniform1f(uDim, cur.dim);
+      gl.uniform3f(uPivot, PIVOT[0], PIVOT[1], PIVOT[2]);
+      var sw = MOTION ? sweep(t) : [0, 0];
+      gl.uniform2f(uTwitch, sw[0], sw[1]);
       gl.drawArrays(gl.TRIANGLES, 0, COUNT);
     }
 

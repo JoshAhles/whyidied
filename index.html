@@ -173,8 +173,6 @@ nav a:hover{color:var(--ink)}
   position:fixed; inset:0; width:100%; height:100%;
   z-index:0; pointer-events:none;
 }
-#stage{cursor:grab}
-#stage.grabbing{cursor:grabbing}
 #cursorlight{
   position:fixed; z-index:0; pointer-events:none; width:44vmax; height:44vmax;
   left:0; top:0; margin:-22vmax 0 0 -22vmax; opacity:0; transition:opacity .5s ease;
@@ -193,21 +191,7 @@ nav a:hover{color:var(--ink)}
    now appears only when the pointer is actually over the object — nothing floats
    in the resting state. */
 .stagehole{position:relative; aspect-ratio:1/.86; min-height:300px}
-.stagehole::before,.stagehole::after{
-  content:""; position:absolute; width:14px; height:14px;
-  border:1px solid var(--amber); opacity:0; transition:opacity .3s ease;
-  pointer-events:none;
-}
-.stagehole::before{top:8%; left:6%; border-right:0; border-bottom:0}
-.stagehole::after{bottom:8%; right:6%; border-left:0; border-top:0}
-.stagehole .grab{
-  position:absolute; bottom:8%; left:6%;
-  font-family:var(--f-display); text-transform:uppercase; letter-spacing:.2em;
-  font-size:10px; color:var(--amber); opacity:0; transition:opacity .3s ease;
-  pointer-events:none;
-}
-.stagehole:hover::before,.stagehole:hover::after,.stagehole:hover .grab{opacity:.75}
-@media (pointer:coarse){.stagehole .grab,.stagehole::before,.stagehole::after{display:none}}
+/* No frame, no hint: they advertised a drag that no longer exists. */
 
 h1{
   font-family:var(--f-display); font-weight:700;
@@ -418,12 +402,10 @@ h1.kin .dot{color:var(--amber)}
 <main>
 
   <!-- ── HERO ──────────────────────────────────────────────────────── -->
-  <section class="hero" data-stage="-0.82,0.04,3.35,0">
+  <section class="hero" data-stage="-0.82,0.06,3.35,0">
     <div class="wrap hero-grid">
 
-      <div class="stagehole" aria-hidden="true">
-        <span class="grab">drag</span>
-      </div>
+      <div class="stagehole" aria-hidden="true"></div>
 
       <div>
         <div class="inst">Fortnite · Windows · Zero Build + Build</div>
@@ -470,7 +452,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── METHOD ────────────────────────────────────────────────────── -->
-  <section id="how" data-stage="0.75,0.00,2.95,0.15">
+  <section id="how" data-stage="-0.70,-0.55,3.70,0.80">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">01 · Method</span></div>
       <h2 data-focus>Every death, reviewed. Not the ones you remember to clip.</h2>
@@ -506,7 +488,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── EXHIBIT ───────────────────────────────────────────────────── -->
-  <section id="last12" data-stage="-0.95,0.07,4.60,0.5">
+  <section id="last12" data-stage="-0.60,-1.10,4.40,1">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">02 · Exhibit A — the tape</span></div>
       <h2>The last twelve seconds of the match, reconstructed</h2>
@@ -543,7 +525,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── THE REFUSAL ───────────────────────────────────────────────── -->
-  <section id="refusal" data-stage="0.84,0.00,3.10,0.1">
+  <section id="refusal" data-stage="-0.50,-1.40,4.60,1">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">03 · The refusal</span></div>
       <div class="housing refuse rise">
@@ -568,7 +550,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── CASE LOG ──────────────────────────────────────────────────── -->
-  <section id="progress" data-stage="-0.52,0.10,4.25,0.4">
+  <section id="progress" data-stage="-0.45,-1.60,4.80,1">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">04 · Case log</span></div>
       <h2>The point is the pattern</h2>
@@ -593,7 +575,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── PRICE ─────────────────────────────────────────────────────── -->
-  <section id="pricing" data-stage="1.14,0.00,4.75,0.65">
+  <section id="pricing" data-stage="-0.40,-1.75,5.00,1">
     <div class="wrap">
       <div class="eyebrow"><span class="inst">05 · Terms</span></div>
       <h2>What a Fortnite coach costs</h2>
@@ -638,7 +620,7 @@ h1.kin .dot{color:var(--amber)}
   </section>
 
   <!-- ── FAQ ───────────────────────────────────────────────────────── -->
-  <section id="faq" data-stage="-1.28,0.04,5.20,0.78">
+  <section id="faq" data-stage="-0.35,-1.90,5.20,1">
     <div class="wrap" style="max-width:900px">
       <div class="eyebrow"><span class="inst">06 · Questions</span></div>
       <h2>Straight answers</h2>
@@ -707,6 +689,6 @@ h1.kin .dot{color:var(--amber)}
   </div>
 </footer>
 
-<script src="main.js?v=44" defer></script>
+<script src="main.js?v=46" defer></script>
 </body>
 </html>
