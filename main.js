@@ -456,7 +456,11 @@
     // NOT force-cache. The page was loaded several times before hero.glb existed,
     // so force-cache happily replayed the cached 404 and the model never arrived
     // — with no error to show for it, because a 404 is a successful fetch.
-    fetch("hero.glb")
+    /* VERSIONED. hero.glb had no cache-buster, so a browser that had seen an
+       older build kept serving it — which is how a genuinely broken asset passed
+       a local check and only failed in production. Bump this whenever the model
+       is rebuilt. */
+    fetch("hero.glb?v=2")
       .then(function (r) { if (!r.ok) throw new Error("no hero.glb (" + r.status + ")"); return r.arrayBuffer(); })
       .then(function (ab) {
         var g = parseGLB(ab);

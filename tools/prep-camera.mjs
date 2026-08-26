@@ -276,27 +276,27 @@ const gltf = {
   asset: { version: "2.0", generator: "whyidied prep-camera.mjs",
            copyright: "AntiqueCamera geometry by Maximilian Kamps / UX3D, CC0 1.0. Textures and materials removed." },
   scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: "hero" }],
-  meshes: [{ name: "hero", primitives: [{
-    attributes: Object.assign({ POSITION: 0, NORMAL: 1, COLOR_0: 2 }, texFiles.length ? { TEXCOORD_0: 3 } : {}),
-    mode: 4, material: texFiles.length ? 0 : undefined, indices: 4,
-  }] }],
+  meshes: [{ name: "hero", primitives: [{ attributes: {}, mode: 4 }] }],
   buffers: [{ byteLength: binOut.length }],
   bufferViews: [],
-  accessors: [
-    { bufferView: 0, componentType: 5126, count, type: "VEC3", min, max },
-    { bufferView: 1, componentType: 5126, count, type: "VEC3" },
-    { bufferView: 2, componentType: 5126, count, type: "VEC4" },
-  ],
+  accessors: [],
 };
-// Attribute views first, then one view per embedded image.
+// Attribute views first, then the index view, then one view per embedded image.
 for (let i = 0; i < 4; i++) {
   gltf.bufferViews.push({ buffer: 0, byteOffset: offs[i], byteLength: parts[i].length, target: 34962 });
 }
 gltf.bufferViews.push({ buffer: 0, byteOffset: offs[4], byteLength: parts[4].length, target: 34963 });
-gltf.accessors.push({ bufferView: 4, componentType: idxArr.BYTES_PER_ELEMENT === 4 ? 5125 : 5123,
+
+const prim = gltf.meshes[0].primitives[0];
+const push = (acc) => (gltf.accessors.push(acc), gltf.accessors.length - 1);
+prim.attributes.POSITION = push({ bufferView: 0, componentType: 5126, count, type: "VEC3", min, max });
+prim.attributes.NORMAL   = push({ bufferView: 1, componentType: 5126, count, type: "VEC3" });
+prim.attributes.COLOR_0  = push({ bufferView: 2, componentType: 5126, count, type: "VEC4" });
+if (texFiles.length) prim.attributes.TEXCOORD_0 = push({ bufferView: 3, componentType: 5126, count, type: "VEC2" });
+prim.indices = push({ bufferView: 4, componentType: idxArr.BYTES_PER_ELEMENT === 4 ? 5125 : 5123,
                       count: IDX.length, type: "SCALAR" });
+if (texFiles.length) prim.material = 0;
 if (texFiles.length) {
-  gltf.accessors.push({ bufferView: 3, componentType: 5126, count, type: "VEC2" });
   gltf.images = []; gltf.samplers = [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }];
   gltf.textures = []; 
   texFiles.forEach((t, i) => {
@@ -328,3 +328,38 @@ const out = Buffer.concat([header, jh, jc, bh, bc]);
 writeFileSync(new URL("../hero.glb", import.meta.url), out);
 console.log(`hero.glb  ${(out.length / 1024 / 1024).toFixed(2)} MB  ${IDX.length / 3} triangles, ${count} vertices${noTripod ? "  (tripod dropped)" : ""}`);
 console.log(`bounds    ${min.map((n) => n.toFixed(2)).join(", ")}  ->  ${max.map((n) => n.toFixed(2)).join(", ")}`);
+
+/* ---- VALIDATE WHAT WAS WRITTEN --------------------------------------
+ * An earlier version of this file hard-coded the accessor indices on the
+ * primitive (TEXCOORD_0: 3, indices: 4) while pushing the accessors in a
+ * different order, so the index accessor took slot 3 and UV took slot 4. The
+ * loader then read UV floats as vertex indices and the hero rendered as
+ * nothing — and it shipped, because a malformed glTF is still a well-formed
+ * FILE. Nothing downstream can catch this; the only place that can is here.
+ */
+{
+  const check = [];
+  const A = gltf.accessors, P0 = gltf.meshes[0].primitives[0];
+  const want = { POSITION: "VEC3", NORMAL: "VEC3", COLOR_0: "VEC4", TEXCOORD_0: "VEC2" };
+  for (const [k, t] of Object.entries(want)) {
+    if (P0.attributes[k] === undefined) continue;
+    if (A[P0.attributes[k]].type !== t) check.push(`${k} is ${A[P0.attributes[k]].type}, expected ${t}`);
+    if (A[P0.attributes[k]].count !== count) check.push(`${k} count ${A[P0.attributes[k]].count} != ${count}`);
+  }
+  const ia = A[P0.indices];
+  if (!ia || ia.type !== "SCALAR") check.push("indices accessor is not SCALAR");
+  else {
+    if (![5123, 5125].includes(ia.componentType)) check.push("indices are not an integer type");
+    if (ia.count % 3) check.push(`index count ${ia.count} is not a multiple of 3`);
+    let mx = 0;
+    for (let i = 0; i < IDX.length; i++) if (IDX[i] > mx) mx = IDX[i];
+    if (mx >= count) check.push(`max index ${mx} addresses vertex ${mx} of ${count}`);
+    if (ia.componentType === 5123 && mx > 65535) check.push("max index exceeds Uint16");
+  }
+  if (check.length) {
+    console.error("REFUSING TO WRITE — the glTF this would produce is invalid:");
+    for (const c of check) console.error("  " + c);
+    process.exit(1);
+  }
+  console.log(`validated ${count} vertices, ${IDX.length / 3} triangles, every index in range`);
+}
