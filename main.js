@@ -254,7 +254,8 @@
          rather than swimming across it. */
       " vec3 an = abs(N); vec2 uv = an.z>an.x&&an.z>an.y ? vP.xy : (an.x>an.y ? vP.zy : vP.xz);" +
       " float grain = n2(vec2(uv.x*90.0, uv.y*3.5))*0.6 + n2(vec2(uv.x*260.0, uv.y*6.0))*0.4;" +
-      " float metal = 0.060 + 0.026*grain;" +" vec3 base = vec3(metal); float rough = 0.42; float ao = 1.0; float mtl = 1.0;" +" if(uTex > 0.5){ base = texture2D(uDiff, vUV).rgb;" +"   vec3 arm = texture2D(uARM, vUV).rgb; ao = arm.r; rough = clamp(arm.g,0.05,1.0); mtl = arm.b;" +"   float lum = dot(base, vec3(0.299,0.587,0.114));" +"   base = mix(base, lum*vec3(0.80,0.85,0.97), 0.92); }" +
+      " float metal = 0.060 + 0.026*grain;" +" vec3 base = vec3(metal); float rough = 0.42; float ao = 1.0; float mtl = 1.0;" +" if(uTex > 0.5){ base = texture2D(uDiff, vUV).rgb;" +"   vec3 arm = texture2D(uARM, vUV).rgb; ao = arm.r; rough = clamp(arm.g,0.05,1.0); mtl = arm.b;" +"   float lum = dot(base, vec3(0.299,0.587,0.114));" +
+      "   lum = mix(0.74, lum, 0.34);" +"   base = lum * vec3(0.93,0.95,1.00); }" +
       /* Panel seams: single-axis grooves with a worn upper lip. Two axes read as
          a waffle; one reads as machining. */
       " float seam = 0.0;" +
@@ -263,7 +264,7 @@
       /* Grime pools on upward faces. */
       " metal *= 1.0 - 0.16*smoothstep(0.25,1.0,N.y)*n2(uv*9.0);" +
       " float fres = pow(1.0 - max(dot(N,V),0.0), 3.4);" +" vec3 L = normalize(vec3(-0.34,0.62,0.85));" +" float spec = pow(max(dot(reflect(-L,N),V),0.0), mix(6.0, 92.0, 1.0-rough));" +" float rim = pow(1.0 - max(dot(N,V),0.0), 6.5) * max(dot(N, normalize(vec3(-0.78,0.30,-0.52))),0.0);" +
-      " vec3 col = base*amb*ao + env*mix(0.10, 0.26 + 0.70*fres, mtl)*(1.0 - 0.75*rough);" +
+      " vec3 col = base*amb*mix(1.0, ao, 0.55) + env*mix(0.10, 0.26 + 0.70*fres, mtl)*(1.0 - 0.75*rough);" +
       /* Light spill: the lamps throw amber onto the shell around them, which is
          what makes an emissive read as a light source rather than a sticker. */
       " float d = distance(vP, vec3(-0.40,0.30,0.49));" +
