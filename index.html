@@ -267,11 +267,26 @@ h2{
 #tape,#geo{display:block; width:100%; background:var(--bay); border:1px solid var(--bezel)}
 #tape{height:96px}
 #geo{aspect-ratio:1/.78}
+.tapehead{display:flex; align-items:center; gap:12px; margin-bottom:12px}
+.tapehead .tc{margin-left:auto; font-size:12px; color:var(--amber); letter-spacing:.04em}
+.rec{
+  display:inline-flex; align-items:center; gap:6px; font-family:var(--f-display);
+  text-transform:uppercase; letter-spacing:.16em; font-size:10px; color:var(--fault);
+}
+.rec i{width:7px; height:7px; background:var(--fault); border-radius:50%}
+.gs .rec i{animation:blink 1.4s steps(1,end) infinite}
+@keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.15}}
+
 .evlist{margin-top:16px; display:flex; flex-direction:column; gap:1px; background:var(--bezel); border:1px solid var(--bezel)}
 .ev{background:var(--bay); padding:9px 12px; display:flex; gap:12px; align-items:baseline; font-size:14.5px; color:#B9B6AF}
 .ev .t{font-family:var(--f-mono); font-size:12px; color:var(--amber); min-width:44px}
-.ev.is-cause{background:#1A1116; color:var(--ink)}
-.ev.is-cause .t{color:var(--fault)}
+.ev{opacity:.28; transition:opacity .35s ease, background .35s ease, color .35s ease}
+.ev.hit{opacity:1}
+.ev.is-cause{background:#120E11; color:#7A756E}
+.ev.is-cause .t{color:#6B5A55}
+.ev.is-cause.hit{background:#1E1218; color:var(--ink)}
+.ev.is-cause.hit .t{color:var(--fault)}
+.ev.is-cause.hit{box-shadow:inset 2px 0 0 var(--fault)}
 
 /* The refusal — the signature panel */
 .refuse{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:clamp(20px,4vw,48px); align-items:center; padding:clamp(24px,4vw,42px)}
@@ -484,13 +499,17 @@ h1.kin .dot{color:var(--amber)}
 
       <div class="exhibit rise" data-focus>
         <div class="pane">
-          <div class="lbl inst dim">Tape · 12.0 s · fault flag at 00:12</div>
+          <div class="tapehead">
+            <span class="inst dim">Tape · 12.0 s</span>
+            <span class="rec"><i></i>REC</span>
+            <span class="tc num" id="tclock">00:00.0</span>
+          </div>
           <canvas id="tape" aria-label="A tape strip with frame ticks and a fault flag at the moment of death."></canvas>
           <div class="evlist">
-            <div class="ev"><span class="t">00:04</span><span>Rotated into open ground with 41 seconds of storm left.</span></div>
-            <div class="ev"><span class="t">00:07</span><span>Wall broken. Not replaced.</span></div>
-            <div class="ev"><span class="t">00:09</span><span>Peeked the same side twice.</span></div>
-            <div class="ev is-cause"><span class="t">00:12</span><span><b>Cause of death.</b> Third peek, same angle, no cover behind you.</span></div>
+            <div class="ev" data-t="4"><span class="t">00:04</span><span>Rotated into open ground with 41 seconds of storm left.</span></div>
+            <div class="ev" data-t="7"><span class="t">00:07</span><span>Wall broken. Not replaced.</span></div>
+            <div class="ev" data-t="9"><span class="t">00:09</span><span>Peeked the same side twice.</span></div>
+            <div class="ev is-cause" data-t="12"><span class="t">00:12</span><span><b>Cause of death.</b> Third peek, same angle, no cover behind you.</span></div>
           </div>
         </div>
         <div class="pane">
@@ -671,6 +690,6 @@ h1.kin .dot{color:var(--amber)}
   </div>
 </footer>
 
-<script src="main.js?v=33" defer></script>
+<script src="main.js?v=40" defer></script>
 </body>
 </html>

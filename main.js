@@ -72,6 +72,15 @@
       });
     }, { rootMargin: "0px 0px -12% 0px" });
     rises.forEach(function (el) { io.observe(el); });
+    // The floor. Also fires on the first real interaction, so a tab that was
+    // never focused still shows its content the moment somebody looks at it.
+    var reveal = function () {
+      rises.forEach(function (el) { el.classList.add("in"); });
+    };
+    setTimeout(reveal, 2600);
+    addEventListener("visibilitychange", function () {
+      if (!document.hidden) setTimeout(reveal, 400);
+    }, { once: true });
   }
 
   /* ── canvas helper: size to the element's box in device pixels ────── */
@@ -555,7 +564,9 @@
     }
 
     var f0 = STAGE[0] || { dist: 5, ox: 0, oy: 0, dim: 0 };
-    var cur = { dist: f0.dist, ox: f0.ox, oy: f0.oy, dim: f0.dim, yaw: 0.5, pitch: -0.2 };
+    var cur = MOTION
+      ? { dist: f0.dist * 2.5, ox: f0.ox * 1.7, oy: f0.oy - 0.5, dim: 1, yaw: -1.5, pitch: 0.55 }
+      : { dist: f0.dist, ox: f0.ox, oy: f0.oy, dim: f0.dim, yaw: 0.5, pitch: -0.2 };
     var dragYaw = 0, dragPitch = 0;
     var dragging = false, lx = 0, ly = 0;
     function down(e) { dragging = true; cv.classList.add("grabbing"); lx = (e.touches ? e.touches[0] : e).clientX; ly = (e.touches ? e.touches[0] : e).clientY; }
@@ -628,171 +639,217 @@
   })();
 
   /* ═══════════════════════════════════════════════════════════════════
-     THE TAPE — frame ticks, a fault flag, a scrub head
+     THE EXHIBIT — scrolling the section REPLAYS the death.
+     One clock drives everything: the playhead on the tape, which evidence rows
+     have happened yet, and how much of the engagement the diagram has drawn.
+     The scrub is not decoration; it is the product's own claim performed —
+     every finding points at the moment it came from.
      ═══════════════════════════════════════════════════════════════════ */
-  (function tape() {
-    var cv = document.getElementById("tape");
-    if (!cv) return;
-    var c = cv.getContext("2d");
-    var head = 0;
+  (function exhibit() {
+    var sec = document.getElementById("last12");
+    var tapeC = document.getElementById("tape"), geoC = document.getElementById("geo");
+    if (!sec || !tapeC || !geoC) return;
+    var tc = document.getElementById("tclock");
+    var rows = [].slice.call(sec.querySelectorAll(".ev"));
+    var tctx = tapeC.getContext("2d"), gctx = geoC.getContext("2d");
+    var DUR = 12.0;
+    var shown = -1, tSm = 0;
 
-    function draw() {
-      fit(cv);
-      var w = cv.width, h = cv.height, dpr = w / cv.getBoundingClientRect().width;
+    /** Measured against the PANELS, not the section. The section is much taller
+     *  than its content because of its padding, so scrubbing across the section
+     *  meant the playhead was still short of 00:12 by the time the panels left
+     *  the screen — and 00:12 is the one moment the whole thing exists to show.
+     *
+     *  Runs from "panels enter the lower fifth" to "panels sit high in view", so
+     *  the death always fires with the exhibit still comfortably readable. */
+    var panels = sec.querySelector(".exhibit") || sec;
+    function progress() {
+      var r = panels.getBoundingClientRect();
+      var vh = innerHeight;
+      var span = r.height + vh * 0.20;
+      return Math.max(0, Math.min(1, (vh * 0.80 - r.top) / (span || 1)));
+    }
+
+    function fmt(t) {
+      var s2 = Math.floor(t), d = Math.floor((t - s2) * 10);
+      return "00:" + (s2 < 10 ? "0" : "") + s2 + "." + d;
+    }
+
+    function drawTape(p) {
+      fit(tapeC);
+      var w = tapeC.width, h = tapeC.height, dpr = w / tapeC.getBoundingClientRect().width;
+      var c = tctx, pad = 14 * dpr, y0 = 16 * dpr, y1 = h - 24 * dpr;
       c.clearRect(0, 0, w, h);
-      var pad = 14 * dpr, y0 = 18 * dpr, y1 = h - 26 * dpr;
 
-      // frame ticks
-      c.strokeStyle = "#263038"; c.lineWidth = Math.max(1, dpr);
+      c.strokeStyle = "#263038"; c.lineWidth = Math.max(1, dpr * 0.9);
       for (var i = 0; i <= 48; i++) {
-        var x = pad + ((w - pad * 2) * i) / 48;
-        var tall = i % 4 === 0;
+        var x = pad + ((w - pad * 2) * i) / 48, tall = i % 4 === 0;
         c.beginPath();
-        c.moveTo(x, tall ? y0 : y0 + (y1 - y0) * 0.28);
-        c.lineTo(x, tall ? y1 : y1 - (y1 - y0) * 0.28);
+        c.moveTo(x, tall ? y0 : y0 + (y1 - y0) * 0.3);
+        c.lineTo(x, tall ? y1 : y1 - (y1 - y0) * 0.3);
         c.stroke();
       }
-      // baseline
-      c.strokeStyle = "#313d46";
-      c.beginPath(); c.moveTo(pad, (y0 + y1) / 2); c.lineTo(w - pad, (y0 + y1) / 2); c.stroke();
-
-      // the scrub head, and the amber trail behind it
-      var hx = pad + (w - pad * 2) * head;
-      var g = c.createLinearGradient(pad, 0, hx, 0);
+      var hx = pad + (w - pad * 2) * p;
+      var g = c.createLinearGradient(pad, 0, Math.max(pad + 1, hx), 0);
       g.addColorStop(0, "rgba(255,182,39,0)");
-      g.addColorStop(1, "rgba(255,182,39,.30)");
+      g.addColorStop(1, "rgba(255,182,39,.34)");
       c.fillStyle = g; c.fillRect(pad, y0, Math.max(0, hx - pad), y1 - y0);
-      c.strokeStyle = "#FFB627"; c.lineWidth = Math.max(1.5, dpr * 1.5);
-      c.beginPath(); c.moveTo(hx, y0 - 4 * dpr); c.lineTo(hx, y1 + 4 * dpr); c.stroke();
 
-      // the fault flag at the death
-      var fx = pad + (w - pad * 2) * 0.965;
-      c.strokeStyle = "#FF4438"; c.lineWidth = Math.max(1.5, dpr * 1.5);
-      c.beginPath(); c.moveTo(fx, y0 - 8 * dpr); c.lineTo(fx, y1 + 8 * dpr); c.stroke();
-      c.fillStyle = "#FF4438";
-      c.beginPath();
-      c.moveTo(fx, y0 - 8 * dpr); c.lineTo(fx + 20 * dpr, y0 - 2 * dpr); c.lineTo(fx, y0 + 4 * dpr);
-      c.closePath(); c.fill();
-
-      // labels
+      // Event ticks, so the tape shows WHERE the findings are before you reach them.
+      for (var r2 = 0; r2 < rows.length; r2++) {
+        var t = +rows[r2].getAttribute("data-t");
+        var ex = pad + (w - pad * 2) * (t / DUR);
+        var passed = p * DUR >= t;
+        c.strokeStyle = rows[r2].classList.contains("is-cause")
+          ? (passed ? "#FF4438" : "rgba(255,68,56,.35)")
+          : (passed ? "#FFB627" : "rgba(255,182,39,.28)");
+        c.lineWidth = Math.max(1.4, dpr * 1.4);
+        c.beginPath(); c.moveTo(ex, y0 - 5 * dpr); c.lineTo(ex, y1 + 5 * dpr); c.stroke();
+        if (rows[r2].classList.contains("is-cause") && passed) {
+          c.fillStyle = "#FF4438";
+          c.beginPath();
+          c.moveTo(ex, y0 - 5 * dpr); c.lineTo(ex + 17 * dpr, y0 + 1 * dpr); c.lineTo(ex, y0 + 7 * dpr);
+          c.closePath(); c.fill();
+        }
+      }
+      c.strokeStyle = "#FFB627"; c.lineWidth = Math.max(1.6, dpr * 1.6);
+      c.beginPath(); c.moveTo(hx, y0 - 7 * dpr); c.lineTo(hx, y1 + 7 * dpr); c.stroke();
       c.fillStyle = "#8C9099";
-      c.font = 600 + " " + Math.round(9 * dpr) + "px 'Saira Condensed',sans-serif";
-      c.fillText("00:00", pad, h - 9 * dpr);
-      c.fillStyle = "#FF4438";
-      c.textAlign = "right"; c.fillText("DEATH  00:12", w - pad, h - 9 * dpr);
+      c.font = "600 " + Math.round(9 * dpr) + "px 'Saira Condensed',sans-serif";
+      c.fillText("00:00", pad, h - 8 * dpr);
+      c.textAlign = "right"; c.fillStyle = "#FF4438";
+      c.fillText("DEATH  00:12", w - pad, h - 8 * dpr);
       c.textAlign = "left";
     }
 
-    if (!MOTION) { head = 0.965; draw(); window.addEventListener("resize", draw); return; }
-    var vis = true;
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(function (e) { vis = e[0].isIntersecting; }).observe(cv);
-    }
-    (function loop() {
-      if (vis) { head += (0.965 - head) * 0.012; if (head > 0.9645) head = 0; draw(); }
-      requestAnimationFrame(loop);
-    })();
-  })();
-
-  /* ═══════════════════════════════════════════════════════════════════
-     ENGAGEMENT GEOMETRY — our own data, drawn top-down.
-     Original artwork by construction: no gameplay footage, no screenshots.
-     Epic's Fan Content Policy carves out fan work with no commercial
-     objective; marketing a paid subscription is a commercial objective, so
-     captured Fortnite frames may not appear anywhere on this site.
-     ═══════════════════════════════════════════════════════════════════ */
-  (function geo() {
-    var cv = document.getElementById("geo");
-    if (!cv) return;
-    var c = cv.getContext("2d");
-    var t = 0;
-
-    function draw() {
-      fit(cv);
-      var w = cv.width, h = cv.height, dpr = w / cv.getBoundingClientRect().width;
-      var S = Math.min(w, h);
+    /* The engagement, drawn in the order it happened. Original artwork by
+       construction — no gameplay footage may appear on this site, so the diagram
+       is our own geometry and that is exactly why it can be shown at all. */
+    function drawGeo(p) {
+      fit(geoC);
+      var w = geoC.width, h = geoC.height, dpr = w / geoC.getBoundingClientRect().width;
+      var c = gctx, S = Math.min(w, h), t = p * DUR;
       c.clearRect(0, 0, w, h);
 
-      // grid
-      c.strokeStyle = "rgba(38,48,56,.85)"; c.lineWidth = Math.max(1, dpr * 0.8);
+      c.strokeStyle = "rgba(38,48,56,.8)"; c.lineWidth = Math.max(1, dpr * 0.8);
       var step = S / 9;
-      for (var i = 1; i < 20; i++) {
-        var x = i * step, y = i * step;
-        if (x < w) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
-        if (y < h) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      for (var i = 1; i < 22; i++) {
+        if (i * step < w) { c.beginPath(); c.moveTo(i * step, 0); c.lineTo(i * step, h); c.stroke(); }
+        if (i * step < h) { c.beginPath(); c.moveTo(0, i * step); c.lineTo(w, i * step); c.stroke(); }
       }
 
-      var me = { x: w * 0.34, y: h * 0.68 };
-      var op = { x: w * 0.70, y: h * 0.30 };
-
-      // storm edge, a slow arc through the corner
-      c.strokeStyle = "rgba(255,182,39,.22)";
-      c.lineWidth = Math.max(1.5, dpr * 1.6);
-      c.beginPath(); c.arc(w * 1.28, h * 1.18, S * 1.02, Math.PI, Math.PI * 1.5); c.stroke();
-      c.fillStyle = "#8C9099";
-      c.font = 600 + " " + Math.round(9 * dpr) + "px 'Saira Condensed',sans-serif";
-      c.fillText("STORM EDGE", w * 0.055, h * 0.115);
-
-      // the opponent's facing cone
+      var me = { x: w * 0.30, y: h * 0.74 }, op = { x: w * 0.72, y: h * 0.28 };
       var ang = Math.atan2(me.y - op.y, me.x - op.x);
-      var spread = 0.36;
-      var reach = S * 0.62;
-      var cg = c.createRadialGradient(op.x, op.y, 0, op.x, op.y, reach);
-      cg.addColorStop(0, "rgba(255,68,56,.26)");
-      cg.addColorStop(1, "rgba(255,68,56,0)");
-      c.fillStyle = cg;
-      c.beginPath(); c.moveTo(op.x, op.y);
-      c.arc(op.x, op.y, reach, ang - spread, ang + spread); c.closePath(); c.fill();
+      var ease2 = function (x) { return x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3); };
+      var seg = function (a, b) { return ease2((t - a) / (b - a)); };
 
-      // range line
-      c.strokeStyle = "rgba(231,228,220,.42)";
-      c.lineWidth = Math.max(1, dpr);
-      c.setLineDash([6 * dpr, 5 * dpr]);
-      c.beginPath(); c.moveTo(me.x, me.y); c.lineTo(op.x, op.y); c.stroke();
-      c.setLineDash([]);
-      var mx = (me.x + op.x) / 2, my = (me.y + op.y) / 2;
-      c.fillStyle = "#E7E4DC";
-      c.font = Math.round(11 * dpr) + "px 'IBM Plex Mono',monospace";
-      c.fillText("34 m", mx + 8 * dpr, my - 6 * dpr);
+      // 0-4s  the rotation, and the storm closing behind it
+      var kR = seg(0, 4);
+      c.strokeStyle = "rgba(255,182,39,.20)"; c.lineWidth = Math.max(1.5, dpr * 1.5);
+      c.beginPath(); c.arc(w * 1.3, h * 1.2, S * (1.16 - 0.14 * kR), Math.PI, Math.PI * 1.5); c.stroke();
+      c.fillStyle = "#8C9099";
+      c.font = "600 " + Math.round(9 * dpr) + "px 'Saira Condensed',sans-serif";
+      c.fillText("STORM EDGE", w * 0.05, h * 0.1);
+      if (kR > 0) {
+        c.strokeStyle = "rgba(255,182,39,.55)"; c.lineWidth = Math.max(1.6, dpr * 1.6);
+        c.setLineDash([5 * dpr, 4 * dpr]);
+        c.beginPath();
+        c.moveTo(w * 0.08, h * 0.94);
+        c.lineTo(w * 0.08 + (me.x - w * 0.08) * kR, h * 0.94 + (me.y - h * 0.94) * kR);
+        c.stroke(); c.setLineDash([]);
+      }
 
-      // opponent marker — fault red, elevated
-      c.fillStyle = "#FF4438";
-      c.beginPath(); c.arc(op.x, op.y, 5.5 * dpr, 0, 7); c.fill();
-      c.strokeStyle = "rgba(255,68,56,.55)"; c.lineWidth = Math.max(1, dpr);
-      var pulse = 1 + (MOTION ? Math.sin(t * 0.05) * 0.16 : 0);
-      c.beginPath(); c.arc(op.x, op.y, 13 * dpr * pulse, 0, 7); c.stroke();
-      c.fillStyle = "#FF4438";
-      c.font = 600 + " " + Math.round(9.5 * dpr) + "px 'Saira Condensed',sans-serif";
-      c.fillText("OPPONENT  +11 m", op.x + 17 * dpr, op.y + 3 * dpr);
+      // 7s  the wall that was not replaced
+      var kW = seg(6.4, 7.6);
+      if (kW > 0) {
+        c.strokeStyle = "rgba(140,144,153," + (0.7 * kW) + ")";
+        c.lineWidth = Math.max(3, dpr * 3.2);
+        c.setLineDash([9 * dpr, 7 * dpr]);
+        c.beginPath();
+        c.moveTo(me.x - 34 * dpr, me.y - 30 * dpr);
+        c.lineTo(me.x + 30 * dpr, me.y - 44 * dpr);
+        c.stroke(); c.setLineDash([]);
+        c.fillStyle = "rgba(140,144,153," + (0.9 * kW) + ")";
+        c.fillText("WALL BROKEN", me.x - 34 * dpr, me.y - 40 * dpr);
+      }
 
-      // you — amber
-      c.fillStyle = "#FFB627";
-      c.beginPath(); c.arc(me.x, me.y, 5.5 * dpr, 0, 7); c.fill();
-      c.fillStyle = "#FFB627";
-      c.fillText("YOU", me.x - 30 * dpr, me.y + 3 * dpr);
-
-      // the peek: two prior looks from the same side, then the fatal third
-      c.strokeStyle = "rgba(255,182,39,.5)";
-      c.lineWidth = Math.max(1, dpr);
-      for (var k = 0; k < 3; k++) {
-        var off = (k - 1) * 5 * dpr;
-        c.globalAlpha = k === 2 ? 1 : 0.42;
+      // 9s  two peeks from the same side
+      var kP = seg(8.4, 9.6);
+      for (var k = 0; k < 2; k++) {
+        var kk = ease2((t - (8.4 + k * 0.5)) / 1.0);
+        if (kk <= 0) continue;
+        c.strokeStyle = "rgba(255,182,39," + (0.4 * kk) + ")";
+        c.lineWidth = Math.max(1, dpr);
+        var off = (k - 0.5) * 7 * dpr;
         c.beginPath();
         c.moveTo(me.x + off, me.y + off);
-        c.lineTo(me.x + off + Math.cos(ang + Math.PI) * -S * 0.2,
-                 me.y + off + Math.sin(ang + Math.PI) * -S * 0.2);
+        c.lineTo(me.x + off + Math.cos(ang) * S * 0.30 * kk, me.y + off + Math.sin(ang) * S * 0.30 * kk);
         c.stroke();
       }
-      c.globalAlpha = 1;
+
+      // 12s  the opponent, their facing, the range, and the fault
+      var kO = seg(10.6, 12);
+      if (kO > 0) {
+        var reach = S * 0.62 * kO, spread = 0.34;
+        var cg = c.createRadialGradient(op.x, op.y, 0, op.x, op.y, Math.max(1, reach));
+        cg.addColorStop(0, "rgba(255,68,56," + (0.3 * kO) + ")");
+        cg.addColorStop(1, "rgba(255,68,56,0)");
+        c.fillStyle = cg;
+        c.beginPath(); c.moveTo(op.x, op.y);
+        c.arc(op.x, op.y, reach, ang - spread, ang + spread); c.closePath(); c.fill();
+
+        c.strokeStyle = "rgba(231,228,220," + (0.5 * kO) + ")";
+        c.lineWidth = Math.max(1, dpr); c.setLineDash([6 * dpr, 5 * dpr]);
+        c.beginPath(); c.moveTo(me.x, me.y);
+        c.lineTo(me.x + (op.x - me.x) * kO, me.y + (op.y - me.y) * kO);
+        c.stroke(); c.setLineDash([]);
+        if (kO > 0.85) {
+          c.fillStyle = "#E7E4DC";
+          c.font = Math.round(11 * dpr) + "px 'IBM Plex Mono',monospace";
+          c.fillText("34 m", (me.x + op.x) / 2 + 8 * dpr, (me.y + op.y) / 2 - 6 * dpr);
+        }
+        c.fillStyle = "#FF4438";
+        c.beginPath(); c.arc(op.x, op.y, 5.5 * dpr * kO, 0, 7); c.fill();
+        if (kO >= 1) {
+          c.strokeStyle = "rgba(255,68,56,.5)"; c.lineWidth = Math.max(1, dpr);
+          var pulse = 1 + (MOTION ? Math.sin(tSm * 4) * 0.14 : 0);
+          c.beginPath(); c.arc(op.x, op.y, 14 * dpr * pulse, 0, 7); c.stroke();
+          c.fillStyle = "#FF4438";
+          c.font = "600 " + Math.round(9.5 * dpr) + "px 'Saira Condensed',sans-serif";
+          c.fillText("OPPONENT  +11 m", op.x + 18 * dpr, op.y + 3 * dpr);
+        }
+      }
+
+      c.fillStyle = "#FFB627";
+      c.beginPath(); c.arc(me.x, me.y, 5.5 * dpr, 0, 7); c.fill();
+      c.font = "600 " + Math.round(9.5 * dpr) + "px 'Saira Condensed',sans-serif";
+      c.fillText("YOU", me.x - 32 * dpr, me.y + 3 * dpr);
     }
 
-    if (!MOTION) { draw(); window.addEventListener("resize", draw); return; }
-    var vis = true;
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(function (e) { vis = e[0].isIntersecting; }).observe(cv);
+    function onScreen() {
+      var r = sec.getBoundingClientRect();
+      return r.bottom > -240 && r.top < innerHeight + 240;
     }
-    (function loop() { if (vis) { t++; draw(); } requestAnimationFrame(loop); })();
+    function paint() {
+      var p = progress();
+      // Smoothed, so a trackpad flick reads as a scrub rather than a jump.
+      tSm += (p - tSm) * (MOTION ? 0.14 : 1);
+      if (Math.abs(p - tSm) < 0.0015) tSm = p;
+      var t = tSm * DUR;
+      if (tc) tc.textContent = fmt(t);
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].classList.toggle("hit", t >= +rows[i].getAttribute("data-t"));
+      }
+      drawTape(tSm); drawGeo(tSm);
+    }
+    if (!MOTION) {
+      tSm = 1; paint();
+      addEventListener("resize", paint);
+      return;
+    }
+    (function loop() { if (onScreen()) paint(); requestAnimationFrame(loop); })();
   })();
+
   /* ═══════════════════════════════════════════════════════════════════
      KINETIC TYPE
      ═══════════════════════════════════════════════════════════════════ */
